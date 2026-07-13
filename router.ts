@@ -30,9 +30,14 @@ const ROTTERI_PROXY_URL = process.env.ROTTERI_PROXY_URL || null;
 const ROTTERI_PROXY_TOKEN = process.env.ROTTERI_PROXY_TOKEN || '';
 
 let mysqlPool: any = null;
-if (!ROTTERI_PROXY_URL) {
-  // Solo crear pool MySQL si estamos en local
-  const mysql = (await import('mysql2/promise')).default;
+
+// Inicialización lazy del pool MySQL (solo en modo local, sin top-level await)
+async function getMysqlPool(): Promise<any> {
+  if (mysqlPool) return mysqlPool;
+  if (ROTTERI_PROXY_URL) return null; // En producción no se usa pool directo
+
+  const mysqlModule = await import('mysql2/promise');
+  const mysql = (mysqlModule as any).default || mysqlModule;
   mysqlPool = mysql.createPool({
     host: 'localhost',
     user: 'root',
@@ -43,9 +48,15 @@ if (!ROTTERI_PROXY_URL) {
     queueLimit: 0,
   });
   console.log('🔌 Modo LOCAL: conexión directa a MySQL en localhost');
+  return mysqlPool;
+}
+
+if (!ROTTERI_PROXY_URL) {
+  console.log('🔌 Modo LOCAL: MySQL se inicializará al primer uso.');
 } else {
   console.log(`🌐 Modo PRODUCCIÓN: usando proxy PHP en ${ROTTERI_PROXY_URL}`);
 }
+
 
 // 3. Caché de manual operativo en memoria para reducir latencia de peticiones de red a InsForge (10 minutos)
 const manualCache: { [tenantId: string]: { manual: string | null; timestamp: number } } = {};
@@ -406,7 +417,8 @@ async function executeLiveRotteriSql(searchTerm: string) {
   }
 
   // ─── LOCAL: MySQL directo ────────────────────────────────────────────────────
-  if (!mysqlPool) throw new Error('MySQL pool no inicializado');
+  const pool = await getMysqlPool();
+  if (!pool) throw new Error('MySQL pool no inicializado');
 
   // Expandir sinónimos bilingües para la búsqueda
   const synonymMap: Record<string, string[]> = {
@@ -432,7 +444,7 @@ async function executeLiveRotteriSql(searchTerm: string) {
   console.log(`📝 SQL: ${mysqlQuery}`);
 
   try {
-    const [rows] = await mysqlPool.execute(mysqlQuery, params);
+    const [rows] = await pool.execute(mysqlQuery, params);
     const results = (rows as any[]).map(row => ({
       name: row.nombre,
       price: row.precio,
@@ -449,6 +461,7 @@ async function executeLiveRotteriSql(searchTerm: string) {
 
 /**
  * Guarda un pedido: via proxy PHP (producción) o MySQL directo (local).
+
  */
 async function savePedidoChat(data: {
   producto_nombre: string;
@@ -477,8 +490,9 @@ async function savePedidoChat(data: {
   }
 
   // ─── LOCAL: MySQL directo ────────────────────────────────────────────────────
-  if (!mysqlPool) return null;
-  const [result] = await mysqlPool.execute(
+  const pool = await getMysqlPool();
+  if (!pool) return null;
+  const [result] = await pool.execute(
     `INSERT INTO pedidos_chat (producto_nombre, cliente_nombre, cliente_telefono, ciudad_entrega, precio_producto, tienda_id, producto_id, notas)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [data.producto_nombre, data.cliente_nombre, data.cliente_telefono, data.ciudad_entrega,
@@ -501,8 +515,9 @@ async function findProductByName(nombre: string): Promise<{ id: number; tienda_i
     const json = await resp.json() as { product: any };
     return json.product || null;
   }
-  if (!mysqlPool) return null;
-  const [rows] = await mysqlPool.execute(
+  const pool = await getMysqlPool();
+  if (!pool) return null;
+  const [rows] = await pool.execute(
     'SELECT id, tienda_id, precio FROM productos WHERE nombre LIKE ? LIMIT 1',
     [`%${nombre.split(' ').slice(0, 3).join(' ')}%`]
   ) as any[];

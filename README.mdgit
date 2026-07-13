@@ -1,0 +1,2 @@
+"# Eteba-Chat"  initgit add README.mdgit commit -m "first commit"git branch -M maingit remote add origin https://github.com/etebachale-group/Eteba-Chat.gitgit push -u origin main
+"# Eteba-Chat"  initgit add README.mdgit commit -m "first commit"git branch -M maingit remote add origin https://github.com/etebachale-group/Eteba-Chat.gitgit push -u origin main
