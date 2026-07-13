@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Eteba AI - Consola de ventas, automatización y consultas RAG multi-tenant.">
+    <title>Eteba Chat</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Panel Lateral (Sidebar Corporativo) -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <button class="new-chat-btn" id="new-chat-btn">
+                    <i data-lucide="plus-circle"></i>
+                    <span>Nueva Consulta RAG</span>
+                </button>
+                <button class="toggle-sidebar-btn" id="toggle-sidebar-btn-left" title="Cerrar panel lateral">
+                    <i data-lucide="sidebar"></i>
+                </button>
+            </div>
+
+            <!-- Historial de Conversaciones Empresariales -->
+            <div class="chat-history" id="chat-history">
+                <div class="history-group">
+                    <span class="group-title">Canales de Automatización</span>
+                    <div class="history-items">
+                        <button class="history-item active" data-chat-id="1">
+                            <i data-lucide="database" class="item-icon"></i>
+                            <span class="item-title">Control de Inventario y Stock</span>
+                            <div class="item-actions">
+                                <i data-lucide="edit-3" class="action-btn rename-btn" title="Renombrar"></i>
+                                <i data-lucide="trash-2" class="action-btn delete-btn" title="Eliminar"></i>
+                            </div>
+                        </button>
+                        <button class="history-item" data-chat-id="2">
+                            <i data-lucide="book-open" class="item-icon"></i>
+                            <span class="item-title">Políticas de Devoluciones y Garantías</span>
+                            <div class="item-actions">
+                                <i data-lucide="edit-3" class="action-btn rename-btn" title="Renombrar"></i>
+                                <i data-lucide="trash-2" class="action-btn delete-btn" title="Eliminar"></i>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="history-group">
+                    <span class="group-title">Soporte de Ventas Clientes</span>
+                    <div class="history-items">
+                        <button class="history-item" data-chat-id="3">
+                            <i data-lucide="users" class="item-icon"></i>
+                            <span class="item-title">Seguimiento y Cierre Comercial</span>
+                            <div class="item-actions">
+                                <i data-lucide="edit-3" class="action-btn rename-btn" title="Renombrar"></i>
+                                <i data-lucide="trash-2" class="action-btn delete-btn" title="Eliminar"></i>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer del Sidebar: Estado de Conexión Corporativo -->
+            <div class="sidebar-footer">
+                <div class="tenant-status-box">
+                    <div class="tenant-icon-wrapper">
+                        <i data-lucide="shield-check"></i>
+                    </div>
+                    <div class="tenant-text">
+                        <span class="title">RAG Conectado</span>
+                        <span class="subtitle">Tenant ID: e22e9ee0-d29a</span>
+                    </div>
+                </div>
+                <div class="user-profile">
+                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="Avatar del usuario" class="user-avatar">
+                    <span class="user-name">Eteba Admin</span>
+                    <button class="settings-btn" id="settings-btn" title="Configuración">
+                        <i data-lucide="settings"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Área Principal (Consola del Chat RAG) -->
+        <main class="chat-container">
+            <!-- Barra Superior (Header) -->
+            <header class="chat-header">
+                <div class="header-left">
+                    <button class="menu-btn" id="menu-btn" title="Abrir panel lateral">
+                        <i data-lucide="menu"></i>
+                    </button>
+                    <div class="model-selector-wrapper">
+                        <button class="model-selector-btn" id="model-selector-btn">
+                            <span>Eteba RAG Engine (Llama 3.1)</span>
+                            <i data-lucide="chevron-down"></i>
+                        </button>
+                        <!-- Dropdown de Canales del Motor -->
+                        <div class="model-dropdown" id="model-dropdown">
+                            <button class="model-option active" data-model="rag-hybrid">
+                                <div class="model-option-info">
+                                    <span class="model-name">Enrutador Híbrido</span>
+                                    <span class="model-desc">Decide automáticamente entre Text-to-SQL e información conceptual.</span>
+                                </div>
+                                <i data-lucide="check" class="check-icon"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="db-status-badge">
+                        <span class="pulse-dot"></span>
+                        <span>InsForge Cloud DB</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Zona de Mensajes / Vista de Bienvenida -->
+            <div class="chat-content" id="chat-content">
+                <!-- Pantalla de Bienvenida Corporativa -->
+                <div class="welcome-screen" id="welcome-screen">
+                    <div class="welcome-logo">
+                        <i data-lucide="aperture" class="logo-spin"></i>
+                    </div>
+                    <h1 class="welcome-company">Eteba Chat</h1>
+                    <h2 class="welcome-title">¿Qué consulta comercial deseas resolver hoy?</h2>
+                    
+                    <!-- Tarjetas de sugerencias comerciales -->
+                    <div class="suggestions-grid">
+                        <button class="suggestion-card" data-prompt="¿Qué productos tenemos y qué stock les queda?">
+                            <span class="suggestion-title">Existencias e Inventario</span>
+                            <span class="suggestion-desc">Consultar stock en la base de datos</span>
+                            <i data-lucide="database" class="card-arrow"></i>
+                        </button>
+                        <button class="suggestion-card" data-prompt="¿Qué es Antigravity RAG y qué tecnologías usa?">
+                            <span class="suggestion-title">Base de Conocimiento</span>
+                            <span class="suggestion-desc">Buscar reglas o manuales corporativos</span>
+                            <i data-lucide="search" class="card-arrow"></i>
+                        </button>
+                        <button class="suggestion-card" data-prompt="Redacta un mensaje de ventas para un cliente interesado en el producto de mayor stock, ofreciéndole un descuento.">
+                            <span class="suggestion-title">Redacción de Ventas</span>
+                            <span class="suggestion-desc">Elaborar oferta en base a datos reales</span>
+                            <i data-lucide="mail" class="card-arrow"></i>
+                        </button>
+                        <button class="suggestion-card" data-prompt="¿Qué productos tienen stock menor a 10 unidades?">
+                            <span class="suggestion-title">Alertas de Reposición</span>
+                            <span class="suggestion-desc">Identificar productos con bajo stock</span>
+                            <i data-lucide="alert-triangle" class="card-arrow"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Flujo de Mensajes -->
+                <div class="messages-wrapper" id="messages-wrapper" style="display: none;">
+                    <!-- Los mensajes se inyectarán dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Área de Entrada de Texto -->
+            <footer class="chat-footer">
+                <div class="input-container-wrapper">
+                    <div class="input-container">
+                        <!-- Botón de Adjuntar Archivos -->
+                        <button class="input-action-btn attach-btn" title="Adjuntar archivos">
+                            <i data-lucide="paperclip"></i>
+                        </button>
+                        <!-- Entrada de texto -->
+                        <textarea class="chat-textarea" id="chat-textarea" placeholder="Consulta existencias de inventario, manuales o políticas..." rows="1"></textarea>
+                        <!-- Botón de enviar -->
+                        <button class="send-btn" id="send-btn" disabled title="Enviar mensaje">
+                            <i data-lucide="arrow-up"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="footer-info">Consola de automatización y RAG Multi-Tenant optimizada para Eteba Chale Group. Respaldado por InsForge.</p>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Script principal -->
+    <script src="app.js"></script>
+    <script>
+        // Inicializa Lucide Icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>

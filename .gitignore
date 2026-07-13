@@ -1,0 +1,38 @@
+# ========================
+# SECRETOS — NUNCA subir a Git
+# ========================
+.env.local
+.env
+.env.*.local
+
+# Dependencias
+node_modules/
+
+# Build compilado
+dist/
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Herramientas de agentes IA (no necesarias en el repo)
+.insforge
+.agents
+.agent
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.roo
+.windsurf
+.qoder
+.qwen
+.trae
+
+# Archivos temporales de test
+out.txt
