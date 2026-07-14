@@ -475,11 +475,14 @@ async function executeLiveRotteriSql(searchTerm: string) {
 
   // ─── PRODUCCIÓN: llamar al proxy PHP ────────────────────────────────────────
   if (ROTTERI_PROXY_URL) {
-    // Si hay sinónimos, hacer múltiples búsquedas y unir resultados
+    // Si el término está vacío, usar '%' para listar todos los productos
+    const searchTerms = terms.filter(t => t.length > 0);
+    const effectiveTerms = searchTerms.length > 0 ? searchTerms : ['%'];
+
     const allResults: any[] = [];
     const seenNames = new Set<string>();
 
-    for (const term of terms) {
+    for (const term of effectiveTerms) {
       try {
         const resp = await fetch(ROTTERI_PROXY_URL, {
           method: 'POST',
@@ -490,7 +493,10 @@ async function executeLiveRotteriSql(searchTerm: string) {
           body: JSON.stringify({ action: 'search_products', term }),
         });
 
-        if (!resp.ok) continue;
+        if (!resp.ok) {
+          console.error(`⚠️ Proxy error [${resp.status}] para "${term}"`);
+          continue;
+        }
         const json = await resp.json() as { results: any[] };
         for (const r of (json.results || [])) {
           if (!seenNames.has(r.name)) {
@@ -498,11 +504,12 @@ async function executeLiveRotteriSql(searchTerm: string) {
             allResults.push(r);
           }
         }
-      } catch (err) {
-        console.error(`⚠️ Error buscando "${term}":`, err);
+      } catch (err: any) {
+        console.error(`⚠️ Error buscando "${term}":`, err.message);
       }
     }
 
+    console.log(`✅ Proxy devolvió ${allResults.length} producto(s)`);
     return { type: 'SQL' as const, sql: '/* proxy */', results: allResults };
   }
 
