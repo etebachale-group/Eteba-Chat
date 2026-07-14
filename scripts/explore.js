@@ -12,7 +12,7 @@ const Explore = (() => {
       name: 'Rotteri',
       category: 'Tiendas',
       description: 'Tienda de moda, zapatillas, pelucas y accesorios',
-      logo: '🛍️',
+      logo: 'R',
       status: 'active'
     },
     {
@@ -20,7 +20,7 @@ const Explore = (() => {
       name: 'MalaboTech',
       category: 'Tecnología',
       description: 'Reparación de teléfonos, accesorios electrónicos y servicios IT',
-      logo: '📱',
+      logo: 'MT',
       status: 'coming'
     },
     {
@@ -28,7 +28,7 @@ const Explore = (() => {
       name: 'GE Express',
       category: 'Servicios',
       description: 'Envíos y logística nacional e internacional',
-      logo: '📦',
+      logo: 'GE',
       status: 'coming'
     },
     {
@@ -36,7 +36,7 @@ const Explore = (() => {
       name: 'Sabor GE',
       category: 'Restaurantes',
       description: 'Comida tradicional ecuatoguineana con delivery',
-      logo: '🍽️',
+      logo: 'SG',
       status: 'coming'
     },
     {
@@ -44,7 +44,7 @@ const Explore = (() => {
       name: 'BataShop',
       category: 'Tiendas',
       description: 'Ropa y calzado importado, tienda online en Bata',
-      logo: '👟',
+      logo: 'BS',
       status: 'coming'
     },
     {
@@ -52,7 +52,7 @@ const Explore = (() => {
       name: 'EduGE Academy',
       category: 'Servicios',
       description: 'Cursos online y formación profesional',
-      logo: '🎓',
+      logo: 'EA',
       status: 'coming'
     }
   ];

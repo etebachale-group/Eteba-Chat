@@ -156,8 +156,20 @@
 }
 
 .feature-card__icon {
-  font-size: 2rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-md);
   margin-bottom: var(--space-md);
+  color: var(--color-primary);
+}
+
+.feature-card__icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .feature-card__title {
@@ -340,7 +352,8 @@
 }
 
 .explore-card__logo {
-  font-size: 2rem;
+  font-size: 0.9rem;
+  font-weight: 700;
   width: 48px;
   height: 48px;
   display: flex;
@@ -348,6 +361,8 @@
   justify-content: center;
   background: var(--color-primary-soft);
   border-radius: var(--radius-md);
+  color: var(--color-primary);
+  letter-spacing: -0.02em;
 }
 
 .explore-card__name {

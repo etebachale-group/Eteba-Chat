@@ -199,6 +199,13 @@ input, textarea, select {
   font-weight: 700;
 }
 
+.nav__logo-img {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+}
+
 .nav__logo-icon {
   font-size: 1.4rem;
 }
@@ -437,6 +444,27 @@ select.input {
   background-clip: text;
 }
 
+/* ─── SVG Icons ────────────────────────────────────────────────────────────── */
+.icon {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.icon--sm {
+  width: 16px;
+  height: 16px;
+}
+
+.icon--md {
+  width: 20px;
+  height: 20px;
+}
+
+.icon--lg {
+  width: 24px;
+  height: 24px;
+}
+
 /* ─── Form ─────────────────────────────────────────────────────────────────── */
 .form-group {
   margin-bottom: var(--space-xl);
@@ -488,6 +516,19 @@ select.input {
   display: grid;
   grid-template-columns: 1.5fr 2fr;
   gap: var(--space-3xl);
+}
+
+.footer__logo-img {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+}
+
+.footer__brand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
 }
 
 .footer__desc {

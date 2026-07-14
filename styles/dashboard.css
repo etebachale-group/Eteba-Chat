@@ -54,7 +54,13 @@
 }
 
 .sidebar__icon {
-  font-size: 1.1rem;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.sidebar__item svg {
+  stroke: currentColor;
 }
 
 /* ─── Dashboard Content ────────────────────────────────────────────────────── */
@@ -213,8 +219,20 @@
 }
 
 .integration-card__icon {
-  font-size: 2rem;
-  margin-bottom: var(--space-md);
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-md);
+  margin: 0 auto var(--space-md);
+  color: var(--color-primary);
+}
+
+.integration-card__icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .integration-card h4 {
