@@ -148,8 +148,8 @@
 
 .feature-card {
   background: var(--color-bg-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-2xl);
@@ -201,6 +201,8 @@
 
 .pricing-card {
   background: var(--color-bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   padding: var(--space-2xl);
@@ -211,6 +213,7 @@
 .pricing-card:hover {
   border-color: var(--color-border-hover);
   transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
 
 .pricing-card--popular {
@@ -312,10 +315,22 @@
 @media (max-width: 768px) {
   .hero {
     padding-top: calc(var(--nav-height) + var(--space-2xl));
+    padding-bottom: var(--space-2xl);
   }
 
   .hero__stats {
-    gap: var(--space-xl);
+    gap: var(--space-lg);
+    flex-wrap: wrap;
+  }
+
+  .hero__cta {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .hero__cta .btn--lg {
+    width: 100%;
+    max-width: 320px;
   }
 
   .features__grid {
@@ -324,8 +339,23 @@
 
   .pricing__grid {
     grid-template-columns: 1fr;
-    max-width: 380px;
+    max-width: 400px;
     margin: 0 auto;
+  }
+
+  .explore__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .explore__filters {
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: var(--space-sm);
+  }
+
+  .connected__logos {
+    gap: var(--space-xl);
   }
 }
 

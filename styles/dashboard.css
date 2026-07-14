@@ -17,7 +17,9 @@
   left: 0;
   width: var(--sidebar-width);
   height: calc(100vh - var(--nav-height));
-  background: var(--color-bg-elevated);
+  background: rgba(28, 37, 65, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-right: 1px solid var(--color-border);
   padding: var(--space-xl) 0;
   overflow-y: auto;
@@ -110,11 +112,19 @@
 
 .metric-card {
   background: var(--color-bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-xl);
   position: relative;
   overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+.metric-card:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
 }
 
 .metric-card::before {
@@ -267,6 +277,31 @@
 }
 
 /* ─── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .dashboard {
+    grid-template-columns: 200px 1fr;
+  }
+
+  .sidebar {
+    width: 200px;
+  }
+
+  .sidebar__item {
+    font-size: var(--font-size-xs);
+    padding: 8px 12px;
+    gap: var(--space-sm);
+  }
+
+  .dashboard__content {
+    margin-left: 200px;
+    padding: var(--space-xl);
+  }
+
+  .metrics__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .dashboard {
     grid-template-columns: 1fr;
@@ -285,13 +320,19 @@
     flex-direction: row;
     overflow-x: auto;
     padding: var(--space-sm) var(--space-md);
-    gap: var(--space-sm);
+    gap: var(--space-xs);
   }
 
   .sidebar__item {
     white-space: nowrap;
     font-size: var(--font-size-xs);
     padding: 8px 12px;
+    flex-shrink: 0;
+  }
+
+  .sidebar__icon {
+    width: 14px;
+    height: 14px;
   }
 
   .dashboard__content {
@@ -300,11 +341,20 @@
   }
 
   .metrics__grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
   }
 
   .dash-tab__row {
     grid-template-columns: 1fr;
+  }
+
+  .integrations__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog__actions {
+    flex-direction: column;
   }
 }
 
