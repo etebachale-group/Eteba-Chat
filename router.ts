@@ -9,12 +9,18 @@ const { Pool } = pg;
 
 // 1. Validar variables de entorno clave
 const databaseUrl = process.env.DATABASE_URL;
-const geminiKey = process.env.GEMINI_API_KEY;
+const geminiKey = process.env.GEMINI_API_KEY || '';
+const openrouterKey = process.env.OPENROUTER_API_KEY || '';
 const baseUrl = process.env.INSFORGE_BASE_URL;
 const apiKey = process.env.INSFORGE_API_KEY;
 
-if (!databaseUrl || !geminiKey || !baseUrl || !apiKey) {
+if (!databaseUrl || !baseUrl || !apiKey) {
   console.error('❌ Error: Configuración incompleta en .env.local');
+  process.exit(1);
+}
+
+if (!geminiKey && !openrouterKey) {
+  console.error('❌ Error: Se necesita GEMINI_API_KEY o OPENROUTER_API_KEY');
   process.exit(1);
 }
 
@@ -92,43 +98,46 @@ interface GeminiResponse {
 }
 
 async function callGemini(systemPrompt: string, userMessage: string, maxTokens: number = 300): Promise<string> {
-  try {
-    const resp = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-goog-api-key': geminiKey!,
-      },
-      body: JSON.stringify({
-        contents: [
-          { role: 'user', parts: [{ text: userMessage }] }
-        ],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: maxTokens,
-        }
-      }),
-    });
+  // Intentar Gemini directo si hay key
+  if (geminiKey) {
+    try {
+      const resp = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': geminiKey,
+        },
+        body: JSON.stringify({
+          contents: [
+            { role: 'user', parts: [{ text: userMessage }] }
+          ],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: maxTokens,
+          }
+        }),
+      });
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error(`❌ Gemini API error [${resp.status}]:`, errText.substring(0, 500));
-      // Fallback a OpenRouter si existe la key
-      return await callOpenRouterFallback(systemPrompt, userMessage, maxTokens);
+      if (resp.ok) {
+        const data = await resp.json() as GeminiResponse;
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return text;
+      } else {
+        const errText = await resp.text();
+        console.error(`❌ Gemini error [${resp.status}]:`, errText.substring(0, 200));
+      }
+    } catch (err: any) {
+      console.error('❌ Gemini fetch error:', err.message);
     }
-
-    const data = await resp.json() as GeminiResponse;
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Disculpe, ¿podría repetir su consulta?';
-  } catch (err: any) {
-    console.error('❌ Gemini fetch error:', err.message);
-    return await callOpenRouterFallback(systemPrompt, userMessage, maxTokens);
   }
+
+  // Fallback: OpenRouter
+  return await callOpenRouterFallback(systemPrompt, userMessage, maxTokens);
 }
 
 /** Fallback a OpenRouter si Gemini falla */
 async function callOpenRouterFallback(systemPrompt: string, userMessage: string, maxTokens: number): Promise<string> {
-  const openrouterKey = process.env.OPENROUTER_API_KEY;
   if (!openrouterKey) return 'Disculpe, el servicio no está disponible en este momento.';
 
   console.log('⚠️ Usando fallback OpenRouter...');
