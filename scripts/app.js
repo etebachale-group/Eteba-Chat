@@ -10,8 +10,14 @@
     AppRouter.init();
     Auth.init();
     Dashboard.init();
+    Explore.init();
     initMobileNav();
     initDocsNav();
+
+    // Cargar datos del dashboard si el usuario ya está logueado
+    if (Auth.isLoggedIn()) {
+      Dashboard.loadDashboardData();
+    }
   });
 
   /** Mobile navigation toggle */

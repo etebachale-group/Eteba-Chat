@@ -29,6 +29,18 @@ const AppRouter = (() => {
         footer.style.display = ['dashboard'].includes(pageName) ? 'none' : 'block';
       }
 
+      // Cargar datos específicos de la página
+      if (pageName === 'dashboard' && typeof Dashboard !== 'undefined' && Auth.isLoggedIn()) {
+        Dashboard.loadDashboardData();
+      }
+
+      // Proteger dashboard — redirigir a landing si no está logueado
+      if (pageName === 'dashboard' && !Auth.isLoggedIn()) {
+        pageName = 'landing';
+        target.classList.remove('active');
+        document.getElementById('page-landing').classList.add('active');
+      }
+
       // Update URL hash
       window.location.hash = pageName === 'landing' ? '' : pageName;
     }

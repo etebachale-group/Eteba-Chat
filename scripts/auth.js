@@ -1,9 +1,8 @@
 /**
  * Eteba Chat — Authentication Module
- * Google OAuth via InsForge SDK
+ * Google OAuth 2.0 directo (sin InsForge Auth)
  */
 const Auth = (() => {
-  const INSFORGE_BASE_URL = 'https://2w3vbe39.us-east.insforge.app';
   let currentUser = null;
 
   function getUser() {
@@ -14,22 +13,13 @@ const Auth = (() => {
     return currentUser !== null;
   }
 
-  async function signInWithGoogle() {
-    // Redirigir al OAuth de InsForge con Google
-    const redirectUrl = `${window.location.origin}${window.location.pathname}`;
-    window.location.href = `${INSFORGE_BASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+  /** Redirigir a Google OAuth (el backend maneja todo el flujo) */
+  function signInWithGoogle() {
+    window.location.href = '/auth/google';
   }
 
-  async function signOut() {
-    try {
-      await fetch(`${INSFORGE_BASE_URL}/auth/v1/logout`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getAccessToken()}` }
-      });
-    } catch (e) {
-      // Ignorar errores de red
-    }
-    localStorage.removeItem('eteba_access_token');
+  function signOut() {
+    localStorage.removeItem('eteba_token');
     localStorage.removeItem('eteba_user');
     currentUser = null;
     updateUI();
@@ -37,7 +27,7 @@ const Auth = (() => {
   }
 
   function getAccessToken() {
-    return localStorage.getItem('eteba_access_token');
+    return localStorage.getItem('eteba_token');
   }
 
   function updateUI() {
@@ -51,7 +41,8 @@ const Auth = (() => {
       if (currentUser.avatar_url) {
         avatarEl.innerHTML = `<img src="${currentUser.avatar_url}" alt="${currentUser.name}">`;
       } else {
-        avatarEl.innerHTML = `<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:14px;font-weight:600;">${(currentUser.name || 'U')[0]}</span>`;
+        const initial = (currentUser.name || currentUser.email || 'U')[0].toUpperCase();
+        avatarEl.innerHTML = `<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:14px;font-weight:600;">${initial}</span>`;
       }
     } else {
       guestEl.classList.remove('hidden');
@@ -59,52 +50,49 @@ const Auth = (() => {
     }
   }
 
+  /** Verificar si hay un token en la URL (redirect de OAuth) o en localStorage */
   function checkSession() {
-    // Verificar si hay un token en URL (redirect de OAuth)
-    const hashParams = new URLSearchParams(window.location.hash.replace('#', '?').replace('?', ''));
-    const accessToken = hashParams.get('access_token');
-    
-    if (accessToken) {
-      localStorage.setItem('eteba_access_token', accessToken);
-      // Limpiar URL
+    // 1. Verificar si hay token en la URL (viene del callback de Google)
+    const urlParams = new URLSearchParams(window.location.search);
+    const authToken = urlParams.get('auth_token');
+
+    if (authToken) {
+      // Guardar token y limpiar URL
+      localStorage.setItem('eteba_token', authToken);
       window.history.replaceState(null, '', window.location.pathname);
-      fetchUser(accessToken);
+      decodeAndSetUser(authToken);
       return;
     }
 
-    // Verificar token guardado
-    const savedToken = localStorage.getItem('eteba_access_token');
-    const savedUser = localStorage.getItem('eteba_user');
-
-    if (savedToken && savedUser) {
-      try {
-        currentUser = JSON.parse(savedUser);
-        updateUI();
-      } catch {
-        localStorage.removeItem('eteba_user');
-      }
+    // 2. Verificar token guardado
+    const savedToken = localStorage.getItem('eteba_token');
+    if (savedToken) {
+      decodeAndSetUser(savedToken);
     }
   }
 
-  async function fetchUser(token) {
+  /** Decodificar token base64url y establecer usuario */
+  function decodeAndSetUser(token) {
     try {
-      const resp = await fetch(`${INSFORGE_BASE_URL}/auth/v1/user`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        currentUser = {
-          id: data.id,
-          email: data.email,
-          name: data.user_metadata?.full_name || data.email?.split('@')[0],
-          avatar_url: data.user_metadata?.avatar_url || null,
-        };
-        localStorage.setItem('eteba_user', JSON.stringify(currentUser));
-        updateUI();
+      const payload = JSON.parse(atob(token.replace(/-/g, '+').replace(/_/g, '/')));
+      currentUser = {
+        id: payload.id,
+        email: payload.email,
+        name: payload.name,
+        avatar_url: payload.avatar_url || null,
+      };
+      localStorage.setItem('eteba_user', JSON.stringify(currentUser));
+      updateUI();
+
+      // Navegar al dashboard si viene de un login fresco
+      if (window.location.search.includes('auth_token') || !window.location.hash) {
         AppRouter.navigate('dashboard');
+        Dashboard.loadDashboardData();
       }
     } catch (e) {
-      console.error('[Auth] Error fetching user:', e);
+      console.error('[Auth] Token inválido:', e);
+      localStorage.removeItem('eteba_token');
+      localStorage.removeItem('eteba_user');
     }
   }
 
@@ -114,7 +102,7 @@ const Auth = (() => {
     document.getElementById('btn-register')?.addEventListener('click', signInWithGoogle);
     document.getElementById('hero-cta')?.addEventListener('click', signInWithGoogle);
 
-    // Avatar click → logout (temporal)
+    // Avatar click → menú/logout
     document.getElementById('user-avatar')?.addEventListener('click', () => {
       if (confirm('¿Cerrar sesión?')) signOut();
     });
