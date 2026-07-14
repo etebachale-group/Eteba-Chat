@@ -134,6 +134,134 @@
   };
 
   /**
+   * Renderiza una tarjeta de formulario para completar un pedido.
+   */
+  const renderOrderForm = (orderForm) => {
+    const card = document.createElement('div');
+    card.className = 'eteba-ai-order-card';
+
+    const productLabel = orderForm.product_name || 'Producto seleccionado';
+
+    // Campos del formulario
+    const fields = [
+      { key: 'customer_name', label: 'Nombre completo', placeholder: 'Ej: Juan Ndong', type: 'text', filled: orderForm.filledFields.customer_name },
+      { key: 'phone', label: 'Teléfono (+240)', placeholder: 'Ej: 222123456', type: 'tel', filled: orderForm.filledFields.phone },
+      { key: 'address', label: 'Ciudad de entrega', placeholder: '', type: 'select', filled: orderForm.filledFields.address }
+    ];
+
+    let formHTML = `
+      <div class="eteba-ai-order-header">
+        <span class="eteba-ai-order-icon">🛒</span>
+        <span class="eteba-ai-order-title">Pedido: ${productLabel}</span>
+      </div>
+      <div class="eteba-ai-order-fields">
+    `;
+
+    fields.forEach(field => {
+      if (field.filled) {
+        formHTML += `<div class="eteba-ai-order-field-filled">✅ ${field.label}: ${field.filled}</div>`;
+      } else if (field.type === 'select') {
+        formHTML += `
+          <div class="eteba-ai-order-field">
+            <label>${field.label}</label>
+            <select data-field="${field.key}" class="eteba-ai-order-input">
+              <option value="">Seleccionar ciudad...</option>
+              <option value="Malabo">Malabo</option>
+              <option value="Bata">Bata</option>
+            </select>
+          </div>
+        `;
+      } else {
+        formHTML += `
+          <div class="eteba-ai-order-field">
+            <label>${field.label}</label>
+            <input type="${field.type}" data-field="${field.key}" class="eteba-ai-order-input" placeholder="${field.placeholder}">
+          </div>
+        `;
+      }
+    });
+
+    formHTML += `
+      </div>
+      <button class="eteba-ai-order-submit">Confirmar Pedido</button>
+    `;
+
+    card.innerHTML = formHTML;
+
+    // Event listener para enviar el formulario
+    const submitBtn = card.querySelector('.eteba-ai-order-submit');
+    submitBtn.addEventListener('click', function() {
+      const inputs = card.querySelectorAll('.eteba-ai-order-input');
+      let message = `Quiero encargar producto: ${orderForm.product_name || 'producto'}`;
+      let allFilled = true;
+
+      inputs.forEach(input => {
+        const field = input.getAttribute('data-field');
+        const value = input.value.trim();
+        if (!value) {
+          allFilled = false;
+          input.style.borderColor = '#ef4444';
+        } else {
+          input.style.borderColor = '';
+          if (field === 'customer_name') message += `, mi nombre es ${value}`;
+          if (field === 'phone') message += `, mi teléfono es ${value}`;
+          if (field === 'address') message += `, entrega en ${value}`;
+        }
+      });
+
+      // Agregar campos ya rellenados
+      if (orderForm.filledFields.customer_name) message += `, mi nombre es ${orderForm.filledFields.customer_name}`;
+      if (orderForm.filledFields.phone) message += `, mi teléfono es ${orderForm.filledFields.phone}`;
+      if (orderForm.filledFields.address) message += `, entrega en ${orderForm.filledFields.address}`;
+
+      if (allFilled) {
+        inputNode.value = message;
+        sendMessage();
+        // Deshabilitar el formulario después de enviar
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Enviando...';
+        inputs.forEach(input => input.disabled = true);
+      }
+    });
+
+    bodyNode.appendChild(card);
+    scrollToBottom();
+  };
+
+  /**
+   * Renderiza una tarjeta de confirmación de pedido exitoso.
+   */
+  const renderOrderSuccess = (confirmation) => {
+    const card = document.createElement('div');
+    card.className = 'eteba-ai-order-card eteba-ai-order-success';
+
+    const priceText = confirmation.price > 0 
+      ? `<div class="eteba-ai-order-detail">💰 Precio: ${parseFloat(confirmation.price).toLocaleString('es-ES')} CFA</div>` 
+      : '';
+    const refText = confirmation.pedidoId 
+      ? `<div class="eteba-ai-order-ref">Ref. #${confirmation.pedidoId}</div>` 
+      : '';
+
+    card.innerHTML = `
+      <div class="eteba-ai-order-header eteba-ai-order-header-success">
+        <span class="eteba-ai-order-icon">✅</span>
+        <span class="eteba-ai-order-title">Pedido Confirmado</span>
+        ${refText}
+      </div>
+      <div class="eteba-ai-order-details">
+        <div class="eteba-ai-order-detail">📦 ${confirmation.product_name}</div>
+        <div class="eteba-ai-order-detail">👤 ${confirmation.customer_name}</div>
+        <div class="eteba-ai-order-detail">📞 ${confirmation.phone}</div>
+        <div class="eteba-ai-order-detail">📍 ${confirmation.address}</div>
+        ${priceText}
+      </div>
+    `;
+
+    bodyNode.appendChild(card);
+    scrollToBottom();
+  };
+
+  /**
    * Renderiza tarjetas interactivas de producto con imagen, precio y CTA.
    */
   const renderProductCards = (products) => {
@@ -231,6 +359,16 @@
         // 2. Si es una consulta de inventario (SQL) y contiene productos con imagen/detalles, renderizar las tarjetas
         if (data.type === 'SQL' && data.results && data.results.length > 0) {
           renderProductCards(data.results);
+        }
+
+        // 3. Si el backend pide datos para un pedido, mostrar formulario como tarjeta
+        if (data.type === 'ORDER_FORM' && data.orderForm) {
+          renderOrderForm(data.orderForm);
+        }
+
+        // 4. Si el pedido fue exitoso, mostrar tarjeta de confirmación
+        if (data.type === 'ORDER_SUCCESS' && data.orderConfirmation) {
+          renderOrderSuccess(data.orderConfirmation);
         }
       } else {
         const errorMsg = data.error || 'Lo siento, hubo un problema al procesar la respuesta.';

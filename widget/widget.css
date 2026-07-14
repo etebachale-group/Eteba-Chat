@@ -382,3 +382,155 @@
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+
+/* ─── Tarjetas de Pedido (Formulario y Confirmación) ────────────────────────── */
+.eteba-ai-order-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 14px;
+  padding: 16px;
+  margin-top: 8px;
+  align-self: flex-start;
+  width: 92%;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  animation: eteba-fade-in 0.3s ease;
+}
+
+.eteba-ai-order-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.eteba-ai-order-icon {
+  font-size: 1.2rem;
+}
+
+.eteba-ai-order-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--eteba-text);
+}
+
+.eteba-ai-order-ref {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--eteba-primary);
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* Campos del formulario */
+.eteba-ai-order-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.eteba-ai-order-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.eteba-ai-order-field label {
+  font-size: 0.74rem;
+  color: var(--eteba-text-muted);
+  font-weight: 500;
+}
+
+.eteba-ai-order-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--eteba-text);
+  font-size: 0.84rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+  font-family: inherit;
+}
+
+.eteba-ai-order-input:focus {
+  border-color: var(--eteba-primary);
+}
+
+.eteba-ai-order-input::placeholder {
+  color: rgba(148, 163, 184, 0.6);
+}
+
+select.eteba-ai-order-input {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+select.eteba-ai-order-input option {
+  background: #1e293b;
+  color: var(--eteba-text);
+}
+
+.eteba-ai-order-field-filled {
+  font-size: 0.8rem;
+  color: var(--eteba-primary);
+  padding: 6px 0;
+}
+
+/* Botón de enviar pedido */
+.eteba-ai-order-submit {
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px 16px;
+  background: var(--eteba-primary);
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.eteba-ai-order-submit:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.eteba-ai-order-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Tarjeta de confirmación exitosa */
+.eteba-ai-order-success {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.eteba-ai-order-header-success {
+  border-bottom-color: rgba(16, 185, 129, 0.15);
+}
+
+.eteba-ai-order-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.eteba-ai-order-detail {
+  font-size: 0.82rem;
+  color: var(--eteba-text);
+  padding: 4px 0;
+}

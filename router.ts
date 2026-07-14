@@ -231,13 +231,13 @@ export async function hybridQuery(tenantId: string, userQuery: string) {
 
   // Flujo B: Consulta de catálogo en MySQL local (1 sola llamada al LLM para responder)
   if (decision.type === 'CATALOGO_SQL') {
-    // Construir consulta SQL flexible de búsqueda
-    const sqlQuery = `SELECT name, price, stock, description, image_url FROM products WHERE name ILIKE '%${decision.term}%' OR description ILIKE '%${decision.term}%'`;
-    
     let rawSqlResults;
     if (tenantId === rotteriTenantId) {
-      rawSqlResults = await executeLiveRotteriSql(sqlQuery);
+      // Para Rotteri: pasar solo el término de búsqueda (el proxy/MySQL local maneja la query)
+      rawSqlResults = await executeLiveRotteriSql(decision.term);
     } else {
+      // Para otros tenants: query directa a Postgres
+      const sqlQuery = `SELECT name, price, stock, description, image_url FROM products WHERE name ILIKE '%${decision.term}%' OR description ILIKE '%${decision.term}%'`;
       rawSqlResults = await executeSecureSql(tenantId, sqlQuery);
     }
     
@@ -314,25 +314,21 @@ Responde estrictamente con el JSON, sin texto adicional, sin bloques de código 
     let humanResponse = '';
     if (missingFields.length > 0) {
       const productMention = data.product_name ? `"${data.product_name}"` : 'el producto';
-      const missingPrompt = `El cliente desea hacer un pedido de ${productMention}.
-Faltan los siguientes datos: ${missingFields.join(', ')}.
-Solicítale de forma muy cálida y entusiasta en un único mensaje los datos restantes. Menciona el producto que quiere comprar para que sepa que lo registraste.`;
 
-      const response = await openai.chat.completions.create({
-        model: 'openrouter/free',
-        messages: [
-          { role: 'system', content: operationalManual || 'Eres un asistente de ventas muy amable de Rotteri.' },
-          { role: 'user', content: missingPrompt }
-        ],
-        temperature: 0.3
-      });
-      humanResponse = response.choices[0]?.message?.content || 'Por favor, indícanos tus datos para procesar tu orden.';
-
-      // No renderizar tarjeta de producto cuando faltan datos (el flujo continúa en próximos mensajes)
+      // Devolver tipo ORDER_FORM para que el widget renderice una tarjeta de formulario
       return {
-        type: 'SALUDO_SOPORTE_GENERAL' as const,
+        type: 'ORDER_FORM' as const,
         results: [],
-        humanResponse
+        humanResponse: `Para completar tu pedido de ${productMention}, necesito los siguientes datos:`,
+        orderForm: {
+          product_name: data.product_name || null,
+          missingFields: missingFields,
+          filledFields: {
+            customer_name: data.customer_name || null,
+            phone: data.phone || null,
+            address: data.address || null,
+          }
+        }
       };
     } else {
       // ✅ GUARDAR PEDIDO REAL (local: MySQL directo | producción: proxy PHP)
@@ -389,9 +385,17 @@ El pedido YA FUE GUARDADO en nuestro sistema${pedidoRef}. Confirma el pedido de 
       humanResponse = response.choices[0]?.message?.content || `¡Pedido${pedidoRef} registrado con éxito! Pronto te contactaremos.`;
 
       return {
-        type: 'SALUDO_SOPORTE_GENERAL' as const,
+        type: 'ORDER_SUCCESS' as const,
         results: [],
-        humanResponse
+        humanResponse,
+        orderConfirmation: {
+          pedidoId: pedidoId,
+          product_name: data.product_name,
+          customer_name: data.customer_name,
+          phone: data.phone,
+          address: data.address,
+          price: precioProd
+        }
       };
     }
 
