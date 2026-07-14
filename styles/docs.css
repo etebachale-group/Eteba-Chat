@@ -52,7 +52,7 @@
 
 .docs__nav-item--active {
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--eteba-purple-light);
   font-weight: 500;
 }
 
@@ -111,7 +111,7 @@
   border-radius: 4px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85em;
-  color: var(--color-primary);
+  color: var(--eteba-cyan);
 }
 
 .docs__article pre.code-block {

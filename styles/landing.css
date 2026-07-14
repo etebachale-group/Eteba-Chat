@@ -25,7 +25,7 @@
   transform: translateX(-50%);
   width: 800px;
   height: 800px;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.06) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(157, 78, 221, 0.08) 0%, rgba(67, 97, 238, 0.04) 40%, transparent 70%);
   border-radius: 50%;
 }
 
@@ -35,12 +35,14 @@
 }
 
 .hero__badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 20px;
   border-radius: var(--radius-full);
   background: var(--color-primary-soft);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  color: var(--color-primary);
+  border: 1px solid rgba(157, 78, 221, 0.2);
+  color: var(--eteba-purple-light);
   font-size: var(--font-size-sm);
   font-weight: 500;
   margin-bottom: var(--space-xl);
@@ -89,7 +91,10 @@
 .hero__stat-number {
   font-size: var(--font-size-2xl);
   font-weight: 700;
-  color: var(--color-primary);
+  background: var(--eteba-gradient-text);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .hero__stat-label {
@@ -143,6 +148,8 @@
 
 .feature-card {
   background: var(--color-bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-2xl);
@@ -150,9 +157,9 @@
 }
 
 .feature-card:hover {
-  border-color: var(--color-primary);
+  border-color: rgba(157, 78, 221, 0.4);
   transform: translateY(-4px);
-  box-shadow: var(--shadow-glow);
+  box-shadow: 0 8px 32px rgba(157, 78, 221, 0.1);
 }
 
 .feature-card__icon {
@@ -207,12 +214,12 @@
 }
 
 .pricing-card--popular {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-glow);
+  border-color: var(--eteba-purple-light);
+  box-shadow: 0 8px 32px rgba(157, 78, 221, 0.15);
 }
 
 .pricing-card--popular:hover {
-  border-color: var(--color-primary);
+  border-color: var(--eteba-purple-light);
 }
 
 .pricing-card__badge {
@@ -220,7 +227,7 @@
   top: -12px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--gradient-primary);
+  background: var(--eteba-gradient);
   color: #fff;
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -244,7 +251,10 @@
 .pricing-card__price {
   font-size: var(--font-size-3xl);
   font-weight: 800;
-  color: var(--color-primary);
+  background: var(--eteba-gradient-text);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .pricing-card__price span {
@@ -336,12 +346,12 @@
 }
 
 .explore-card--active {
-  border-color: rgba(16, 185, 129, 0.3);
+  border-color: rgba(157, 78, 221, 0.3);
 }
 
 .explore-card--active:hover {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-glow);
+  border-color: var(--eteba-purple-light);
+  box-shadow: 0 8px 32px rgba(157, 78, 221, 0.12);
 }
 
 .explore-card__header {

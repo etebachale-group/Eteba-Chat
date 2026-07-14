@@ -49,8 +49,8 @@
 
 .sidebar__item--active {
   background: var(--color-primary-soft);
-  color: var(--color-primary);
-  border: 1px solid rgba(16, 185, 129, 0.15);
+  color: var(--eteba-purple-light);
+  border: 1px solid rgba(157, 78, 221, 0.15);
 }
 
 .sidebar__icon {
@@ -124,7 +124,7 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: var(--gradient-primary);
+  background: var(--eteba-gradient);
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -193,7 +193,7 @@
   flex: 1;
   font-family: 'JetBrains Mono', monospace;
   font-size: var(--font-size-sm);
-  color: var(--color-primary);
+  color: var(--eteba-cyan);
   word-break: break-all;
 }
 
@@ -435,9 +435,9 @@
 }
 
 .toast--info {
-  background: var(--color-info);
+  background: var(--eteba-blue-main);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
 }
 
 /* ─── Animations ───────────────────────────────────────────────────────────── */
