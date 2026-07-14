@@ -196,86 +196,87 @@ ${contextString ? `DATOS CONSULTADOS:\n${contextString}\n` : ''}REGLAS: Responde
  * Enrutador Heurístico Ultra-Rápido en TypeScript (Cero llamadas de clasificación a la API de LLM)
  * Clasifica la intención analizando patrones de texto locales en milisegundos.
  */
-function classifyIntentHeuristically(query: string): { type: 'SALUDO_SOPORTE_GENERAL' | 'CATALOGO_SQL' | 'ENVIOS_SEMANTIC' | 'REGISTRO_PEDIDO'; term: string } {
+function classifyIntentHeuristically(query: string): { type: 'SALUDO_SOPORTE_GENERAL' | 'CATALOGO_SQL' | 'ENVIOS_SEMANTIC' | 'REGISTRO_PEDIDO' | 'TIENDAS' | 'ENVIO_CALCULO'; term: string } {
   const q = query.toLowerCase().trim();
 
-  // 1. Detección de registro de pedidos (patrones de click en botón del widget o datos de contacto)
+  // 1. Detección de registro de pedidos
   const phonePattern = /(?:\+?240\s*)?[23569]\d{8}\b/;
-  const isOrdering = q.includes('comprar') || q.includes('encargar') || q.includes('pedido') || q.includes('ordenar') || q.includes('mi nombre') || q.includes('llamo');
-  
-  // Patrón amplio para cualquier variante del botón "Encargar" del widget
+  const isOrdering = q.includes('comprar') || q.includes('encargar') || q.includes('pedido') || q.includes('ordenar') || q.includes('mi nombre') || q.includes('llamo') || q.includes('confirmar');
   const orderClickPattern = /quiero\s+(encargar|comprar)\s+(el\s+)?producto/i;
   const isDirectOrderClick = orderClickPattern.test(q) || q.includes('encargar producto') || q.includes('quiero comprar');
   if (isDirectOrderClick || (phonePattern.test(q) && isOrdering)) {
     return { type: 'REGISTRO_PEDIDO', term: query };
   }
 
-  // 2. Detección de envíos y tarifas semánticas
-  const shippingKeywords = ['envio', 'envios', 'enviar', 'tarifa', 'tarifas', 'costo', 'precio de envio', 'bata', 'malabo', 'llegar', 'abeme', 'modjobuy', 'agencia', 'agencias'];
+  // 2. Detección de tiendas
+  const storeKeywords = ['tienda', 'tiendas', 'vendedor', 'vendedores', 'seller', 'shop', 'store'];
+  if (storeKeywords.some(kw => q.includes(kw)) && !q.includes('producto')) {
+    return { type: 'TIENDAS', term: query };
+  }
+
+  // 3. Detección de cálculo de envío
+  const shippingCalcPatterns = ['cuanto cuesta enviar', 'costo de envio', 'precio envio', 'calcular envio', 'enviar de', 'enviar a', 'envio de', 'envio a'];
+  if (shippingCalcPatterns.some(kw => q.includes(kw))) {
+    return { type: 'ENVIO_CALCULO', term: query };
+  }
+
+  // 4. Detección de info de envíos general (agencias, tarifas)
+  const shippingKeywords = ['envio', 'envios', 'tarifa', 'tarifas', 'agencia', 'agencias', 'abeme', 'modjobuy'];
   if (shippingKeywords.some(kw => q.includes(kw))) {
-    // Si contiene marcas o productos además de envío, priorizar catálogo
     const catalogExclusions = ['lacoste', 'shure', 'audio-technica', 'focusrite', 'auriculares', 'peluca', 'wig', 'teclado'];
     if (!catalogExclusions.some(kw => q.includes(kw))) {
       return { type: 'ENVIOS_SEMANTIC', term: query };
     }
   }
 
-  // 3. Detección de catálogo (palabras de productos, consultas de inventario, stock, etc.)
+  // 5. Detección de catálogo (productos, precios, stock)
   const catalogKeywords = [
     'zapatilla', 'zapatillas', 'zapato', 'zapatos', 'sneaker', 'sneakers', 'lacoste', 'nike', 'adidas',
-    'peluca', 'pelucas', 'wig', 'wigs', 'frontal', 'lace', 'olivia',
-    'auricular', 'auriculares', 'headphone', 'headphones', 'audio-technica',
+    'peluca', 'pelucas', 'wig', 'wigs', 'frontal', 'lace', 'olivia', 'perruque',
+    'auricular', 'auriculares', 'headphone', 'headphones', 'audio-technica', 'tws',
     'microfono', 'microfonos', 'mic', 'shure', 'sm7b',
     'teclado', 'teclados', 'focusrite', 'estudio', 'interfaz',
     'producto', 'productos', 'disponible', 'disponibles', 'catalogo', 'catálogo',
     'precio', 'precios', 'costo', 'stock', 'cantidad', 'inventario',
-    'tienen', 'venden', 'encargar', 'mostrar', 'ver', 'hay',
+    'tienen', 'venden', 'mostrar', 'ver', 'hay', 'busco', 'necesito', 'quiero ver',
     'ropa', 'camisa', 'camisas', 'pantalon', 'pantalones', 'vestido', 'vestidos',
     'bolso', 'bolsos', 'accesorio', 'accesorios', 'joya', 'joyas',
-    'perfume', 'perfumes', 'crema', 'cremas', 'maquillaje'
+    'perfume', 'perfumes', 'crema', 'cremas', 'maquillaje', 'sandalia', 'sandalias',
+    'reloj', 'relojes', 'gafas', 'lentes', 'moda', 'calzado',
+    'categoria', 'categorias', 'categoría', 'categorías'
   ];
   if (catalogKeywords.some(kw => q.includes(kw))) {
-    // Limpiar palabras conversacionales de ruido del término de búsqueda SQL
     let cleanQuery = q;
     const noisePatterns = [
       /quiero\s+(encargar|comprar)\s+(el\s+)?producto\s*:\s*/gi,
-      /quiero\s+encargar\s*:\s*/gi,
-      /quiero\s+comprar\s*:\s*/gi,
       /precio\s+de\s+l[ao]s?\s+/gi,
       /precio\s+de\s+/gi,
-      /tienen\s+/gi,
-      /busco\s+/gi,
-      /venden\s+/gi,
-      /necesito\s+/gi,
-      /quiero\s+(ver|comprar|encargar)\s+/gi
+      /tienen\s+/gi, /busco\s+/gi, /venden\s+/gi,
+      /necesito\s+/gi, /quiero\s+(ver|comprar|encargar)\s+/gi,
+      /hay\s+/gi, /mostrar\s+/gi,
     ];
-    noisePatterns.forEach(pat => {
-      cleanQuery = cleanQuery.replace(pat, '');
-    });
+    noisePatterns.forEach(pat => { cleanQuery = cleanQuery.replace(pat, ''); });
 
-    // Extraer palabras clave principales
     let searchTerms = cleanQuery.split(/\s+/).filter(word => {
       const cleanWord = word.toLowerCase().replace(/[^a-z0-9áéíóúñ]/g, '');
-      return cleanWord.length > 2 && !['que', 'del', 'los', 'las', 'con', 'para', 'una', 'uno', 'por', 'tiene', 'tienen', 'precio', 'cuesta', 'cuanto', 'como', 'donde', 'quiero', 'encargar', 'producto', 'productos', 'disponible', 'disponibles', 'mostrar', 'hay'].includes(cleanWord);
+      return cleanWord.length > 2 && !['que', 'del', 'los', 'las', 'con', 'para', 'una', 'uno', 'por', 'tiene', 'tienen', 'precio', 'cuesta', 'cuanto', 'como', 'donde', 'quiero', 'encargar', 'producto', 'productos', 'disponible', 'disponibles', 'mostrar', 'hay', 'ver'].includes(cleanWord);
     });
-    
-    // Si después de limpiar no queda nada significativo, usar término genérico para listar todo
+
     const finalTerm = searchTerms.length > 0 ? searchTerms.join(' ') : '';
     return { type: 'CATALOGO_SQL', term: finalTerm };
   }
 
-  // 4. Fallback a conversación general/saludos
+  // 6. Fallback a conversación general
   return { type: 'SALUDO_SOPORTE_GENERAL', term: query };
 }
-
 /**
  * Enrutador híbrido de alto rendimiento.
  */
 export async function hybridQuery(tenantId: string, userQuery: string) {
-  // 1. Obtener manual operativo dinámico de la caché local (latencia de red reducida a 0ms en llamadas repetidas)
+  // 1. Obtener manual operativo dinámico de la caché local
   const operationalManual = await getCachedOperationalManual(tenantId);
 
-  // 2. Clasificación heurística instantánea en TypeScript (Latencia reducida de 3000ms a 0ms)
+  // 2. Clasificación heurística instantánea
   const decision = classifyIntentHeuristically(userQuery);
   console.log(`⚡ Clasificación Heurística: [${decision.type}] | Término: "${decision.term}"`);
 
@@ -310,14 +311,82 @@ export async function hybridQuery(tenantId: string, userQuery: string) {
     };
   }
 
-  // Flujo C: Consulta semántica de envíos RAG (1 sola llamada al LLM para responder)
+  // Flujo C: Consulta semántica de envíos RAG
   if (decision.type === 'ENVIOS_SEMANTIC') {
+    // Para Rotteri: intentar usar el proxy para info de agencias
+    if (tenantId === rotteriTenantId && ROTTERI_PROXY_URL) {
+      try {
+        const resp = await fetch(ROTTERI_PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Chat-Token': ROTTERI_PROXY_TOKEN },
+          body: JSON.stringify({ action: 'list_agencies' }),
+        });
+        if (resp.ok) {
+          const json = await resp.json() as any;
+          if (json.agencies && json.agencies.length > 0) {
+            const humanResponse = await generateHumanResponse(userQuery, json.agencies, 'SQL', operationalManual);
+            return { type: 'SQL' as const, results: json.agencies, humanResponse };
+          }
+        }
+      } catch (e) { /* fallback to semantic */ }
+    }
     const rawSemanticResults = await executeSemanticSearch(tenantId, decision.term);
     const humanResponse = await generateHumanResponse(userQuery, rawSemanticResults.results, 'SEMANTIC', operationalManual);
-    return {
-      ...rawSemanticResults,
-      humanResponse
-    };
+    return { ...rawSemanticResults, humanResponse };
+  }
+
+  // Flujo C2: Cálculo de envío específico
+  if (decision.type === 'ENVIO_CALCULO' && tenantId === rotteriTenantId && ROTTERI_PROXY_URL) {
+    // Extraer origen/destino del texto del usuario
+    const shippingPrompt = `Extrae origen y destino del envío de este mensaje: "${userQuery}"
+Responde SOLO JSON: {"origin":"ciudad o país","destination":"ciudad o país"}`;
+    const extracted = await callLLM('Eres un extractor de datos. Solo JSON.', shippingPrompt, 60);
+    let origin = '', destination = '';
+    try {
+      const match = extracted.match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        origin = parsed.origin || '';
+        destination = parsed.destination || '';
+      }
+    } catch {}
+
+    if (origin || destination) {
+      try {
+        const resp = await fetch(ROTTERI_PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Chat-Token': ROTTERI_PROXY_TOKEN },
+          body: JSON.stringify({ action: 'calculate_shipping', origin, destination, weight: 1.0 }),
+        });
+        if (resp.ok) {
+          const json = await resp.json() as any;
+          const humanResponse = await generateHumanResponse(userQuery, json.options || [], 'SQL', operationalManual);
+          return { type: 'SQL' as const, results: json.options || [], humanResponse };
+        }
+      } catch (e) { /* fallback */ }
+    }
+    // Fallback to general response
+    const humanResponse = await generateHumanResponse(userQuery, [], 'SALUDO_SOPORTE_GENERAL', operationalManual);
+    return { type: 'SALUDO_SOPORTE_GENERAL' as const, results: [], humanResponse };
+  }
+
+  // Flujo E: Tiendas
+  if (decision.type === 'TIENDAS' && tenantId === rotteriTenantId && ROTTERI_PROXY_URL) {
+    try {
+      const resp = await fetch(ROTTERI_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Chat-Token': ROTTERI_PROXY_TOKEN },
+        body: JSON.stringify({ action: 'list_stores' }),
+      });
+      if (resp.ok) {
+        const json = await resp.json() as any;
+        const stores = json.stores || [];
+        const humanResponse = await generateHumanResponse(userQuery, stores, 'SQL', operationalManual);
+        return { type: 'SQL' as const, results: stores, humanResponse };
+      }
+    } catch (e) { /* fallback */ }
+    const humanResponse = await generateHumanResponse(userQuery, [], 'SALUDO_SOPORTE_GENERAL', operationalManual);
+    return { type: 'SALUDO_SOPORTE_GENERAL' as const, results: [], humanResponse };
   }
 
   // Flujo D: Captura y validación estructurada de pedidos
@@ -449,6 +518,35 @@ Confirma de forma cálida y breve. Menciona la referencia si existe.`;
 }
 
 /**
+ * Filtrado inteligente con LLM cuando el proxy devuelve catálogo completo
+ */
+async function smartFilterWithLLM(userQuery: string, products: any[]): Promise<any[]> {
+  const productList = products.map((p, i) => `${i}: ${p.name} (${p.price} CFA)${p.tags ? ' [' + p.tags + ']' : ''}`).join('\n');
+  
+  const prompt = `El usuario busca: "${userQuery}"
+Catálogo disponible:
+${productList}
+
+Responde SOLO con los números (índices) de productos relevantes, separados por comas.
+Considera sinónimos y traducciones (español/francés/inglés).
+Si ninguno coincide, responde: NONE`;
+
+  const response = await callLLM('Eres un filtro de productos. Responde solo con números.', prompt, 50);
+  
+  if (response.includes('NONE') || response.includes('ninguno')) {
+    return [];
+  }
+
+  const indices = response.match(/\d+/g);
+  if (!indices) return products.slice(0, 5); // fallback: mostrar primeros 5
+
+  return indices
+    .map(i => products[parseInt(i)])
+    .filter(p => p !== undefined)
+    .slice(0, 8);
+}
+
+/**
  * Llama al proxy PHP (producción) o a MySQL directo (local).
  * En ambos casos devuelve el mismo formato de resultados.
  */
@@ -475,42 +573,41 @@ async function executeLiveRotteriSql(searchTerm: string) {
 
   // ─── PRODUCCIÓN: llamar al proxy PHP ────────────────────────────────────────
   if (ROTTERI_PROXY_URL) {
-    // Si el término está vacío, usar '%' para listar todos los productos
+    // Enviar búsqueda al proxy con todos los sinónimos
     const searchTerms = terms.filter(t => t.length > 0);
-    const effectiveTerms = searchTerms.length > 0 ? searchTerms : ['%'];
+    const effectiveTerm = searchTerms.length > 0 ? searchTerms[0] : '';
 
-    const allResults: any[] = [];
-    const seenNames = new Set<string>();
+    try {
+      const resp = await fetch(ROTTERI_PROXY_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Chat-Token': ROTTERI_PROXY_TOKEN,
+        },
+        body: JSON.stringify({ action: 'search_products', term: effectiveTerm, limit: 30 }),
+      });
 
-    for (const term of effectiveTerms) {
-      try {
-        const resp = await fetch(ROTTERI_PROXY_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Chat-Token': ROTTERI_PROXY_TOKEN,
-          },
-          body: JSON.stringify({ action: 'search_products', term }),
-        });
-
-        if (!resp.ok) {
-          console.error(`⚠️ Proxy error [${resp.status}] para "${term}"`);
-          continue;
-        }
-        const json = await resp.json() as { results: any[] };
-        for (const r of (json.results || [])) {
-          if (!seenNames.has(r.name)) {
-            seenNames.add(r.name);
-            allResults.push(r);
-          }
-        }
-      } catch (err: any) {
-        console.error(`⚠️ Error buscando "${term}":`, err.message);
+      if (!resp.ok) {
+        console.error(`⚠️ Proxy error [${resp.status}]`);
+        return { type: 'SQL' as const, sql: '/* proxy error */', results: [] };
       }
-    }
 
-    console.log(`✅ Proxy devolvió ${allResults.length} producto(s)`);
-    return { type: 'SQL' as const, sql: '/* proxy */', results: allResults };
+      const json = await resp.json() as { results: any[]; note?: string; count?: number };
+      const results = json.results || [];
+      console.log(`✅ Proxy: ${results.length} producto(s), note: ${json.note || 'none'}`);
+
+      // Si el proxy devolvió catálogo completo (fallback) y tenemos término,
+      // usar Groq para filtrar semánticamente
+      if (json.note === 'fallback_catalog' && searchTerm && results.length > 5) {
+        const filtered = await smartFilterWithLLM(searchTerm, results);
+        return { type: 'SQL' as const, sql: '/* proxy+llm */', results: filtered };
+      }
+
+      return { type: 'SQL' as const, sql: '/* proxy */', results };
+    } catch (err: any) {
+      console.error('⚠️ Proxy fetch error:', err.message);
+      return { type: 'SQL' as const, sql: '/* proxy error */', results: [] };
+    }
   }
 
   // ─── LOCAL: MySQL directo ────────────────────────────────────────────────────

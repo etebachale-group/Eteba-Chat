@@ -416,6 +416,100 @@
   box-shadow: 0 2px 8px rgba(157, 78, 221, 0.3);
 }
 
+/* ─── Login Panel ──────────────────────────────────────────────────────────── */
+.eteba-ai-login-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.eteba-login-content {
+  text-align: center;
+  max-width: 260px;
+}
+
+.eteba-login-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(157, 78, 221, 0.1);
+  border-radius: 14px;
+  color: var(--eteba-w-purple);
+}
+
+.eteba-login-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.eteba-login-content h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--eteba-w-text);
+}
+
+.eteba-login-content p {
+  font-size: 0.82rem;
+  color: var(--eteba-w-text-muted);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.eteba-login-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 16px;
+  background: #fff;
+  color: #333;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.eteba-login-btn:hover {
+  background: #f8f8f8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.eteba-login-explore {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: var(--eteba-w-text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: color 0.2s;
+  font-family: inherit;
+}
+
+.eteba-login-explore:hover {
+  color: var(--eteba-w-purple);
+}
+
+/* ─── Product Origin ───────────────────────────────────────────────────────── */
+.eteba-ai-product-origin {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.6rem;
+  color: var(--eteba-w-cyan);
+}
+
 /* ─── Animations ───────────────────────────────────────────────────────────── */
 @keyframes eteba-bounce {
   0%, 80%, 100% { transform: scale(0); }
