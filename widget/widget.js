@@ -28,8 +28,10 @@
     return;
   }
 
-  const API_ENDPOINT = 'http://localhost:3000/api/query';
-  const ROTTERI_PLATFORM_BASE = 'http://localhost/rotteri/public/'; // URL base para cargar imágenes del catálogo de Rotteri
+  // Detectar entorno: en producción usa la URL de Render, en local usa localhost
+  const scriptOrigin = new URL(currentScript.src).origin;
+  const API_ENDPOINT = scriptOrigin + '/api/query';
+  const ROTTERI_PLATFORM_BASE = 'https://rotteri.com/'; // URL base para cargar imágenes del catálogo de Rotteri
   const widgetBaseUrl = currentScript.src.split('?')[0].replace('widget.js', '');
 
   // 2. Inyectar CSS

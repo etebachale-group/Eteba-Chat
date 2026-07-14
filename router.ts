@@ -352,6 +352,18 @@ Solicítale de forma muy cálida y entusiasta en un único mensaje los datos res
           }
         }
 
+        // Guardar el pedido en la base de datos
+        pedidoId = await savePedidoChat({
+          producto_nombre: data.product_name || '',
+          cliente_nombre: data.customer_name,
+          cliente_telefono: data.phone,
+          ciudad_entrega: data.address,
+          precio_producto: precioProd,
+          tienda_id: tiendaId,
+          producto_id: productId,
+          notas: ''
+        });
+
         console.log(`✅ Pedido #${pedidoId} guardado en pedidos_chat para cliente: ${data.customer_name}`);
       } catch (dbErr: any) {
         console.error('⚠️ Error guardando pedido en MySQL:', dbErr.message);
