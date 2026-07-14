@@ -3,18 +3,17 @@ dotenv.config({ path: '.env.local' });
 
 import { createClient } from '@insforge/sdk';
 import { getExtractor } from './ingest.js';
-import OpenAI from 'openai';
 import pg from 'pg';
 
 const { Pool } = pg;
 
 // 1. Validar variables de entorno clave
 const databaseUrl = process.env.DATABASE_URL;
-const openrouterKey = process.env.OPENROUTER_API_KEY;
+const geminiKey = process.env.GEMINI_API_KEY;
 const baseUrl = process.env.INSFORGE_BASE_URL;
 const apiKey = process.env.INSFORGE_API_KEY;
 
-if (!databaseUrl || !openrouterKey || !baseUrl || !apiKey) {
+if (!databaseUrl || !geminiKey || !baseUrl || !apiKey) {
   console.error('❌ Error: Configuración incompleta en .env.local');
   process.exit(1);
 }
@@ -85,13 +84,38 @@ async function getCachedOperationalManual(tenantId: string): Promise<string | nu
   }
 }
 
-// 4. Inicializar OpenRouter
-const getOpenRouterClient = () => {
-  return new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
-    apiKey: openrouterKey,
+// 4. Cliente Gemini API (directo, sin OpenRouter)
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+interface GeminiResponse {
+  candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
+}
+
+async function callGemini(systemPrompt: string, userMessage: string, maxTokens: number = 300): Promise<string> {
+  const resp = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        { role: 'user', parts: [{ text: userMessage }] }
+      ],
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: maxTokens,
+      }
+    }),
   });
-};
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error('❌ Gemini API error:', resp.status, errText);
+    return 'Disculpe, hubo un error procesando su consulta. Intente de nuevo.';
+  }
+
+  const data = await resp.json() as GeminiResponse;
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Disculpe, ¿podría repetir su consulta?';
+}
 
 /**
  * Genera la respuesta del bot en base al manual y el contexto recuperado (Única llamada al LLM)
@@ -102,41 +126,21 @@ async function generateHumanResponse(
   type: 'SQL' | 'SEMANTIC' | 'SALUDO_SOPORTE_GENERAL',
   operationalManual: string | null
 ): Promise<string> {
-  const openai = getOpenRouterClient();
-  
   let contextString = '';
   if (type === 'SQL') {
-    contextString = `RESULTADOS DE INVENTARIO EN TIEMPO REAL:\n${JSON.stringify(retrievedData, null, 2)}`;
+    contextString = `RESULTADOS DE INVENTARIO:\n${JSON.stringify(retrievedData, null, 2)}`;
   } else if (type === 'SEMANTIC') {
-    contextString = `REGLAS DE NEGOCIO Y TARIFAS DE ENVÍOS:\n${retrievedData.map((r: any, i: number) => `[Referencia #${i+1}]: ${r.content}`).join('\n\n')}`;
-  } else {
-    contextString = `CONVERSACIÓN GENERAL.`;
+    contextString = `INFORMACIÓN RELEVANTE:\n${retrievedData.map((r: any, i: number) => `[${i+1}]: ${r.content}`).join('\n')}`;
   }
 
-  const fallbackManual = `Actúas como Asistente de Ventas de la tienda. Habla de forma muy empática y en español de Guinea Ecuatorial.`;
+  const fallbackManual = `Eres Asistente de Ventas. Habla en español de forma empática y concisa.`;
   const activeManual = operationalManual || fallbackManual;
 
   const systemPrompt = `${activeManual}
 
-CONTEXTO DE BASE DE DATOS RECUPERADO (INFORMACIÓN EXACTA):
-${contextString}
+${contextString ? `DATOS CONSULTADOS:\n${contextString}\n` : ''}REGLAS: Responde en base al contexto. NO inventes datos. Si hay productos, menciona nombre y precio. Sé conciso.`;
 
-ADAPTACIÓN DE IDIOMA Y TRADUCCIÓN (CRÍTICO):
-Varios productos pueden tener nombres técnicos en inglés (ej. 'Wig Olivia', 'Lace Frontal'). Al responder en español, traduce o adapta los nombres a su equivalente natural en español (ej. traduciendo 'Wig' como 'Peluca', 'Lace Frontal' como 'Encaje frontal'). Puedes dejar el nombre técnico original entre paréntesis para fines de búsqueda (ej. "Peluca Olivia (Wig Olivia)").
-
-INSTRUCCIÓN CRÍTICA DE SEGURIDAD:
-Responde de forma humana en base al manual. NO inventes productos, stock ni precios que no estén explícitamente detallados en el contexto anterior.`;
-
-  const response = await openai.chat.completions.create({
-    model: 'openrouter/free',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userQuery }
-    ],
-    temperature: 0.3
-  });
-
-  return response.choices[0]?.message?.content || 'Disculpe las molestias, ¿podría repetir su consulta?';
+  return await callGemini(systemPrompt, userQuery, 300);
 }
 
 /**
@@ -169,11 +173,17 @@ function classifyIntentHeuristically(query: string): { type: 'SALUDO_SOPORTE_GEN
 
   // 3. Detección de catálogo (palabras de productos, consultas de inventario, stock, etc.)
   const catalogKeywords = [
-    'zapatilla', 'zapatillas', 'zapato', 'sneaker', 'sneakers', 'lacoste', 
+    'zapatilla', 'zapatillas', 'zapato', 'zapatos', 'sneaker', 'sneakers', 'lacoste', 'nike', 'adidas',
     'peluca', 'pelucas', 'wig', 'wigs', 'frontal', 'lace', 'olivia',
     'auricular', 'auriculares', 'headphone', 'headphones', 'audio-technica',
     'microfono', 'microfonos', 'mic', 'shure', 'sm7b',
-    'teclado', 'teclados', 'focusrite', 'estudio', 'interfaz', 'precio', 'costo', 'stock', 'cantidad', 'inventario', 'tienen', 'venden', 'catalogo', 'encargar'
+    'teclado', 'teclados', 'focusrite', 'estudio', 'interfaz',
+    'producto', 'productos', 'disponible', 'disponibles', 'catalogo', 'catálogo',
+    'precio', 'precios', 'costo', 'stock', 'cantidad', 'inventario',
+    'tienen', 'venden', 'encargar', 'mostrar', 'ver', 'hay',
+    'ropa', 'camisa', 'camisas', 'pantalon', 'pantalones', 'vestido', 'vestidos',
+    'bolso', 'bolsos', 'accesorio', 'accesorios', 'joya', 'joyas',
+    'perfume', 'perfumes', 'crema', 'cremas', 'maquillaje'
   ];
   if (catalogKeywords.some(kw => q.includes(kw))) {
     // Limpiar palabras conversacionales de ruido del término de búsqueda SQL
@@ -197,9 +207,12 @@ function classifyIntentHeuristically(query: string): { type: 'SALUDO_SOPORTE_GEN
     // Extraer palabras clave principales
     let searchTerms = cleanQuery.split(/\s+/).filter(word => {
       const cleanWord = word.toLowerCase().replace(/[^a-z0-9áéíóúñ]/g, '');
-      return cleanWord.length > 2 && !['que', 'del', 'los', 'con', 'para', 'una', 'uno', 'por', 'tiene', 'tienen', 'precio', 'cuesta', 'cuanto', 'como', 'donde', 'quiero', 'encargar', 'producto'].includes(cleanWord);
+      return cleanWord.length > 2 && !['que', 'del', 'los', 'las', 'con', 'para', 'una', 'uno', 'por', 'tiene', 'tienen', 'precio', 'cuesta', 'cuanto', 'como', 'donde', 'quiero', 'encargar', 'producto', 'productos', 'disponible', 'disponibles', 'mostrar', 'hay'].includes(cleanWord);
     });
-    return { type: 'CATALOGO_SQL', term: searchTerms.join(' ') };
+    
+    // Si después de limpiar no queda nada significativo, usar término genérico para listar todo
+    const finalTerm = searchTerms.length > 0 ? searchTerms.join(' ') : '';
+    return { type: 'CATALOGO_SQL', term: finalTerm };
   }
 
   // 4. Fallback a conversación general/saludos
@@ -260,7 +273,6 @@ export async function hybridQuery(tenantId: string, userQuery: string) {
 
   // Flujo D: Captura y validación estructurada de pedidos
   if (decision.type === 'REGISTRO_PEDIDO') {
-    const openai = getOpenRouterClient();
 
     // Extracción local del nombre del producto (sin LLM) desde el patrón del botón del widget
     let productNameLocal: string | null = null;
@@ -269,27 +281,10 @@ export async function hybridQuery(tenantId: string, userQuery: string) {
       productNameLocal = widgetOrderMatch[1].trim();
     }
     
-    const extractionPrompt = `Actúas como un extractor de datos de pedidos para "Eteba Chat".
-Analiza la consulta del usuario y extrae la información de compra estructurada en un objeto JSON válido con las siguientes claves:
-{
-  "customer_name": "Nombre completo de la persona o null si no se proporciona",
-  "phone": "Número de teléfono extraído (si no tiene prefijo, agrégalo o mantenlo) o null si no se proporciona",
-  "address": "Dirección de entrega o ciudad (Malabo o Bata o similar) o null si no se proporciona",
-  "product_name": "Nombre o tipo de producto que desea comprar o null si no se especifica"
-}
+    const extractionPrompt = `Extrae datos de pedido del mensaje. Responde SOLO con JSON válido:
+{"customer_name": "nombre o null", "phone": "teléfono o null", "address": "ciudad o null", "product_name": "producto o null"}`;
 
-Responde estrictamente con el JSON, sin texto adicional, sin bloques de código markdown.`;
-
-    const extractionResponse = await openai.chat.completions.create({
-      model: 'openrouter/free',
-      messages: [
-        { role: 'system', content: extractionPrompt },
-        { role: 'user', content: userQuery }
-      ],
-      temperature: 0
-    });
-
-    let rawJson = extractionResponse.choices[0]?.message?.content || '{}';
+    const rawJson = await callGemini(extractionPrompt, userQuery, 150);
     const jsonMatch = rawJson.match(/\{[\s\S]*\}/);
     const cleanJson = jsonMatch ? jsonMatch[0] : rawJson;
 
@@ -367,22 +362,21 @@ Responde estrictamente con el JSON, sin texto adicional, sin bloques de código 
       }
 
       const pedidoRef = pedidoId ? ` (Referencia #${pedidoId})` : '';
-      const successPrompt = `El cliente ha completado su pedido${pedidoRef}:
+      const successPrompt = `Pedido${pedidoRef} completado:
 - Nombre: ${data.customer_name}
 - Teléfono: ${data.phone}
-- Ciudad de entrega: ${data.address}
-- Producto: ${data.product_name}${precioProd > 0 ? `\n- Precio: ${precioProd.toLocaleString('es-ES')} CFA` : ''}
-El pedido YA FUE GUARDADO en nuestro sistema${pedidoRef}. Confirma el pedido de forma muy cálida, menciona el número de referencia si lo tienes, y dile que pronto lo contactarán para coordinar la entrega en ${data.address}.`;
+- Ciudad: ${data.address}
+- Producto: ${data.product_name}${precioProd > 0 ? ` - ${precioProd.toLocaleString('es-ES')} CFA` : ''}
+Confirma de forma cálida y breve. Menciona la referencia si existe.`;
 
-      const response = await openai.chat.completions.create({
-        model: 'openrouter/free',
-        messages: [
-          { role: 'system', content: operationalManual || 'Eres un asistente de ventas muy amable de Rotteri.' },
-          { role: 'user', content: successPrompt }
-        ],
-        temperature: 0.3
-      });
-      humanResponse = response.choices[0]?.message?.content || `¡Pedido${pedidoRef} registrado con éxito! Pronto te contactaremos.`;
+      humanResponse = await callGemini(
+        operationalManual || 'Eres un asistente de ventas amable.',
+        successPrompt,
+        200
+      );
+      if (!humanResponse || humanResponse.includes('error')) {
+        humanResponse = `¡Pedido${pedidoRef} registrado con éxito! Pronto te contactaremos.`;
+      }
 
       return {
         type: 'ORDER_SUCCESS' as const,
@@ -410,53 +404,78 @@ El pedido YA FUE GUARDADO en nuestro sistema${pedidoRef}. Confirma el pedido de 
  * En ambos casos devuelve el mismo formato de resultados.
  */
 async function executeLiveRotteriSql(searchTerm: string) {
-  console.log(`🔌 Buscando productos: "${searchTerm}"`);
+  console.log(`🔌 Buscando productos: "${searchTerm || '(todo)'}"`);
+
+  // Expandir sinónimos bilingües (aplica tanto para proxy como local)
+  const synonymMap: Record<string, string[]> = {
+    wig: ['peluca'], wigs: ['peluca'], peluca: ['wig'], pelucas: ['wig'],
+    sneaker: ['zapatilla'], sneakers: ['zapatilla'], zapatilla: ['sneaker'], zapatillas: ['sneaker'],
+    headphone: ['auricular'], headphones: ['auricular'], auricular: ['headphone'], auriculares: ['headphone'],
+    zapato: ['zapatilla'], zapatos: ['zapatilla'],
+  };
+
+  const terms = searchTerm ? [searchTerm] : [''];
+  if (searchTerm) {
+    const lower = searchTerm.toLowerCase();
+    for (const [key, synonyms] of Object.entries(synonymMap)) {
+      if (lower.includes(key)) {
+        synonyms.forEach(s => { if (!terms.includes(s)) terms.push(s); });
+      }
+    }
+  }
 
   // ─── PRODUCCIÓN: llamar al proxy PHP ────────────────────────────────────────
   if (ROTTERI_PROXY_URL) {
-    const resp = await fetch(ROTTERI_PROXY_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Chat-Token': ROTTERI_PROXY_TOKEN,
-      },
-      body: JSON.stringify({ action: 'search_products', term: searchTerm }),
-    });
+    // Si hay sinónimos, hacer múltiples búsquedas y unir resultados
+    const allResults: any[] = [];
+    const seenNames = new Set<string>();
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(`Proxy PHP error ${resp.status}: ${errText}`);
+    for (const term of terms) {
+      try {
+        const resp = await fetch(ROTTERI_PROXY_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Chat-Token': ROTTERI_PROXY_TOKEN,
+          },
+          body: JSON.stringify({ action: 'search_products', term }),
+        });
+
+        if (!resp.ok) continue;
+        const json = await resp.json() as { results: any[] };
+        for (const r of (json.results || [])) {
+          if (!seenNames.has(r.name)) {
+            seenNames.add(r.name);
+            allResults.push(r);
+          }
+        }
+      } catch (err) {
+        console.error(`⚠️ Error buscando "${term}":`, err);
+      }
     }
 
-    const json = await resp.json() as { results: any[] };
-    return { type: 'SQL' as const, sql: '/* proxy */', results: json.results || [] };
+    return { type: 'SQL' as const, sql: '/* proxy */', results: allResults };
   }
 
   // ─── LOCAL: MySQL directo ────────────────────────────────────────────────────
   const pool = await getMysqlPool();
   if (!pool) throw new Error('MySQL pool no inicializado');
 
-  // Expandir sinónimos bilingües para la búsqueda
-  const synonymMap: Record<string, string[]> = {
-    wig: ['peluca'], wigs: ['peluca'], peluca: ['wig'], pelucas: ['wig'],
-    sneaker: ['zapatilla'], sneakers: ['zapatilla'], zapatilla: ['sneaker'], zapatillas: ['sneaker'],
-    headphone: ['auricular'], headphones: ['auricular'], auricular: ['headphone'], auriculares: ['headphone'],
-  };
+  let mysqlQuery: string;
+  let params: string[];
 
-  const terms = [searchTerm];
-  const lower = searchTerm.toLowerCase();
-  for (const [key, synonyms] of Object.entries(synonymMap)) {
-    if (lower.includes(key)) {
-      synonyms.forEach(s => { if (!terms.includes(s)) terms.push(s); });
-    }
+  if (!searchTerm) {
+    // Listar todos los productos disponibles
+    mysqlQuery = `SELECT nombre, precio, cantidad, descripcion, imagen_url FROM productos WHERE cantidad > 0 ORDER BY nombre ASC LIMIT 10`;
+    params = [];
+  } else {
+    const whereClauses = terms.map(() =>
+      '(nombre LIKE ? OR descripcion LIKE ?)'
+    ).join(' OR ');
+    params = terms.flatMap(t => [`%${t}%`, `%${t}%`]);
+    mysqlQuery = `SELECT nombre, precio, cantidad, descripcion, imagen_url FROM productos WHERE (${whereClauses}) AND cantidad > 0 ORDER BY nombre ASC LIMIT 10`;
   }
 
-  const whereClauses = terms.map(() =>
-    '(nombre LIKE ? OR descripcion LIKE ?)'
-  ).join(' OR ');
-  const params = terms.flatMap(t => [`%${t}%`, `%${t}%`]);
-
-  const mysqlQuery = `SELECT nombre, precio, cantidad, descripcion, imagen_url FROM productos WHERE (${whereClauses}) AND cantidad > 0 ORDER BY nombre ASC LIMIT 10`;
   console.log(`📝 SQL: ${mysqlQuery}`);
 
   try {

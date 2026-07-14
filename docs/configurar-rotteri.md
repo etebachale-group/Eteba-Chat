@@ -31,10 +31,10 @@ define('CHAT_TOKEN', getenv('CHAT_PROXY_TOKEN') ?: 'TU_TOKEN_SECRETO_AQUI');
 Reemplazar por:
 
 ```php
-define('CHAT_TOKEN', getenv('CHAT_PROXY_TOKEN') ?: 'eTb_pXy_9Kw4mR7qN2vL8jB3fZ6hD1');
+define('CHAT_TOKEN', getenv('CHAT_PROXY_TOKEN') ?: 'TU_TOKEN_SECRETO_AQUI');
 ```
 
-> Este token DEBE ser idéntico al valor de `ROTTERI_PROXY_TOKEN` en el `.env.local` de Eteba Chat y en las variables de entorno de Render.
+> Este token DEBE ser idéntico al valor de `ROTTERI_PROXY_TOKEN` en el `.env.local` de Eteba Chat y en las variables de entorno de Render. Genera uno aleatorio y seguro.
 
 ---
 
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS pedidos_chat (
 ```bash
 curl -X POST http://localhost/rotteri/public/api/chat-proxy.php \
   -H "Content-Type: application/json" \
-  -H "X-Chat-Token: eTb_pXy_9Kw4mR7qN2vL8jB3fZ6hD1" \
+  -H "X-Chat-Token: TU_TOKEN_SECRETO" \
   -d '{"action": "search_products", "term": "zapato"}'
 ```
 
@@ -127,7 +127,7 @@ Respuesta esperada:
 ```bash
 curl -X POST https://rotteri.com/api/chat-proxy.php \
   -H "Content-Type: application/json" \
-  -H "X-Chat-Token: eTb_pXy_9Kw4mR7qN2vL8jB3fZ6hD1" \
+  -H "X-Chat-Token: TU_TOKEN_SECRETO" \
   -d '{"action": "search_products", "term": "zapato"}'
 ```
 
@@ -156,7 +156,7 @@ No debe tener permisos de ejecución (no es CGI).
 
 | Concepto | Valor | Dónde se usa |
 |----------|-------|--------------|
-| Token secreto | `eTb_pXy_9Kw4mR7qN2vL8jB3fZ6hD1` | `.env.local` de Eteba Chat + `chat-proxy.php` de Rotteri + Variables de Render |
+| Token secreto | *(definido en .env.local)* | `.env.local` de Eteba Chat + `chat-proxy.php` de Rotteri + Variables de Render |
 | URL del proxy | `https://rotteri.com/api/chat-proxy.php` | `.env.local` de Eteba Chat + Variables de Render |
 | Header del token | `X-Chat-Token` | Lo envía el backend Node.js, lo valida el PHP |
 
