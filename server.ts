@@ -19,8 +19,7 @@ const __dirname = path.dirname(__filename);
 app.use(cors()); // Permitir peticiones CORS del widget desde cualquier puerto/origen
 app.use(express.json());
 
-// Servir la interfaz estática (HTML, CSS, JS del chat)
-// Servimos desde la raíz del proyecto ya que los archivos index.html, style.css y app.js están allí
+// Servir la interfaz estática (HTML, CSS, JS del panel y widget)
 app.use(express.static(path.join(__dirname, '..')));
 
 /**

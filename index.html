@@ -1,193 +1,563 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Eteba AI - Consola de ventas, automatización y consultas RAG multi-tenant.">
-    <title>Eteba Chat</title>
-    <!-- Google Fonts: Inter & Outfit -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Stylesheet -->
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eteba Chat — Automatización Inteligente para Negocios</title>
+  <meta name="description" content="Plataforma de automatización comercial con IA. Conecta tu negocio, configura asistentes virtuales y vende más.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/landing.css">
+  <link rel="stylesheet" href="styles/dashboard.css">
+  <link rel="stylesheet" href="styles/docs.css">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Panel Lateral (Sidebar Corporativo) -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <button class="new-chat-btn" id="new-chat-btn">
-                    <i data-lucide="plus-circle"></i>
-                    <span>Nueva Consulta RAG</span>
-                </button>
-                <button class="toggle-sidebar-btn" id="toggle-sidebar-btn-left" title="Cerrar panel lateral">
-                    <i data-lucide="sidebar"></i>
-                </button>
-            </div>
 
-            <!-- Historial de Conversaciones Empresariales -->
-            <div class="chat-history" id="chat-history">
-                <div class="history-group">
-                    <span class="group-title">Canales de Automatización</span>
-                    <div class="history-items">
-                        <button class="history-item active" data-chat-id="1">
-                            <i data-lucide="database" class="item-icon"></i>
-                            <span class="item-title">Control de Inventario y Stock</span>
-                            <div class="item-actions">
-                                <i data-lucide="edit-3" class="action-btn rename-btn" title="Renombrar"></i>
-                                <i data-lucide="trash-2" class="action-btn delete-btn" title="Eliminar"></i>
-                            </div>
-                        </button>
-                        <button class="history-item" data-chat-id="2">
-                            <i data-lucide="book-open" class="item-icon"></i>
-                            <span class="item-title">Políticas de Devoluciones y Garantías</span>
-                            <div class="item-actions">
-                                <i data-lucide="edit-3" class="action-btn rename-btn" title="Renombrar"></i>
-                                <i data-lucide="trash-2" class="action-btn delete-btn" title="Eliminar"></i>
-                            </div>
-                        </button>
-                    </div>
-                </div>
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- NAVBAR GLOBAL                                                          -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <nav class="nav" id="main-nav">
+    <div class="nav__container">
+      <a href="#" class="nav__logo" data-navigate="landing">
+        <span class="nav__logo-icon">⚡</span>
+        <span class="nav__logo-text">Eteba<span class="nav__logo-accent">Chat</span></span>
+      </a>
 
-                <div class="history-group">
-                    <span class="group-title">Soporte de Ventas Clientes</span>
-                    <div class="history-items">
-                        <button class="history-item" data-chat-id="3">
-                            <i data-lucide="users" class="item-icon"></i>
-                            <span class="item-title">Seguimiento y Cierre Comercial</span>
-                            <div class="item-actions">
-                                <i data-lucide="edit-3" class="action-btn rename-btn" title="Renombrar"></i>
-                                <i data-lucide="trash-2" class="action-btn delete-btn" title="Eliminar"></i>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-            </div>
+      <div class="nav__links" id="nav-links">
+        <a href="#" class="nav__link" data-navigate="landing">Inicio</a>
+        <a href="#" class="nav__link" data-navigate="explore">Explorar</a>
+        <a href="#" class="nav__link" data-navigate="pricing">Precios</a>
+        <a href="#" class="nav__link" data-navigate="docs">Docs</a>
+      </div>
 
-            <!-- Footer del Sidebar: Estado de Conexión Corporativo -->
-            <div class="sidebar-footer">
-                <div class="tenant-status-box">
-                    <div class="tenant-icon-wrapper">
-                        <i data-lucide="shield-check"></i>
-                    </div>
-                    <div class="tenant-text">
-                        <span class="title">RAG Conectado</span>
-                        <span class="subtitle">Tenant ID: e22e9ee0-d29a</span>
-                    </div>
-                </div>
-                <div class="user-profile">
-                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="Avatar del usuario" class="user-avatar">
-                    <span class="user-name">Eteba Admin</span>
-                    <button class="settings-btn" id="settings-btn" title="Configuración">
-                        <i data-lucide="settings"></i>
-                    </button>
-                </div>
-            </div>
-        </aside>
+      <div class="nav__actions">
+        <!-- Visible cuando NO está logueado -->
+        <div id="auth-guest">
+          <button class="btn btn--ghost" id="btn-login">Iniciar Sesión</button>
+          <button class="btn btn--primary" id="btn-register">Comenzar Gratis</button>
+        </div>
+        <!-- Visible cuando SÍ está logueado -->
+        <div id="auth-user" class="hidden">
+          <a href="#" class="nav__link" data-navigate="dashboard">Mi Panel</a>
+          <div class="nav__avatar" id="user-avatar"></div>
+        </div>
+      </div>
 
-        <!-- Área Principal (Consola del Chat RAG) -->
-        <main class="chat-container">
-            <!-- Barra Superior (Header) -->
-            <header class="chat-header">
-                <div class="header-left">
-                    <button class="menu-btn" id="menu-btn" title="Abrir panel lateral">
-                        <i data-lucide="menu"></i>
-                    </button>
-                    <div class="model-selector-wrapper">
-                        <button class="model-selector-btn" id="model-selector-btn">
-                            <span>Eteba RAG Engine (Llama 3.1)</span>
-                            <i data-lucide="chevron-down"></i>
-                        </button>
-                        <!-- Dropdown de Canales del Motor -->
-                        <div class="model-dropdown" id="model-dropdown">
-                            <button class="model-option active" data-model="rag-hybrid">
-                                <div class="model-option-info">
-                                    <span class="model-name">Enrutador Híbrido</span>
-                                    <span class="model-desc">Decide automáticamente entre Text-to-SQL e información conceptual.</span>
-                                </div>
-                                <i data-lucide="check" class="check-icon"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="header-right">
-                    <div class="db-status-badge">
-                        <span class="pulse-dot"></span>
-                        <span>InsForge Cloud DB</span>
-                    </div>
-                </div>
-            </header>
-
-            <!-- Zona de Mensajes / Vista de Bienvenida -->
-            <div class="chat-content" id="chat-content">
-                <!-- Pantalla de Bienvenida Corporativa -->
-                <div class="welcome-screen" id="welcome-screen">
-                    <div class="welcome-logo">
-                        <i data-lucide="aperture" class="logo-spin"></i>
-                    </div>
-                    <h1 class="welcome-company">Eteba Chat</h1>
-                    <h2 class="welcome-title">¿Qué consulta comercial deseas resolver hoy?</h2>
-                    
-                    <!-- Tarjetas de sugerencias comerciales -->
-                    <div class="suggestions-grid">
-                        <button class="suggestion-card" data-prompt="¿Qué productos tenemos y qué stock les queda?">
-                            <span class="suggestion-title">Existencias e Inventario</span>
-                            <span class="suggestion-desc">Consultar stock en la base de datos</span>
-                            <i data-lucide="database" class="card-arrow"></i>
-                        </button>
-                        <button class="suggestion-card" data-prompt="¿Qué es Antigravity RAG y qué tecnologías usa?">
-                            <span class="suggestion-title">Base de Conocimiento</span>
-                            <span class="suggestion-desc">Buscar reglas o manuales corporativos</span>
-                            <i data-lucide="search" class="card-arrow"></i>
-                        </button>
-                        <button class="suggestion-card" data-prompt="Redacta un mensaje de ventas para un cliente interesado en el producto de mayor stock, ofreciéndole un descuento.">
-                            <span class="suggestion-title">Redacción de Ventas</span>
-                            <span class="suggestion-desc">Elaborar oferta en base a datos reales</span>
-                            <i data-lucide="mail" class="card-arrow"></i>
-                        </button>
-                        <button class="suggestion-card" data-prompt="¿Qué productos tienen stock menor a 10 unidades?">
-                            <span class="suggestion-title">Alertas de Reposición</span>
-                            <span class="suggestion-desc">Identificar productos con bajo stock</span>
-                            <i data-lucide="alert-triangle" class="card-arrow"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Flujo de Mensajes -->
-                <div class="messages-wrapper" id="messages-wrapper" style="display: none;">
-                    <!-- Los mensajes se inyectarán dinámicamente -->
-                </div>
-            </div>
-
-            <!-- Área de Entrada de Texto -->
-            <footer class="chat-footer">
-                <div class="input-container-wrapper">
-                    <div class="input-container">
-                        <!-- Botón de Adjuntar Archivos -->
-                        <button class="input-action-btn attach-btn" title="Adjuntar archivos">
-                            <i data-lucide="paperclip"></i>
-                        </button>
-                        <!-- Entrada de texto -->
-                        <textarea class="chat-textarea" id="chat-textarea" placeholder="Consulta existencias de inventario, manuales o políticas..." rows="1"></textarea>
-                        <!-- Botón de enviar -->
-                        <button class="send-btn" id="send-btn" disabled title="Enviar mensaje">
-                            <i data-lucide="arrow-up"></i>
-                        </button>
-                    </div>
-                </div>
-                <p class="footer-info">Consola de automatización y RAG Multi-Tenant optimizada para Eteba Chale Group. Respaldado por InsForge.</p>
-            </footer>
-        </main>
+      <button class="nav__mobile-toggle" id="nav-toggle" aria-label="Menú">
+        <span></span><span></span><span></span>
+      </button>
     </div>
+  </nav>
 
-    <!-- Script principal -->
-    <script src="app.js"></script>
-    <script>
-        // Inicializa Lucide Icons
-        lucide.createIcons();
-    </script>
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- SECCIÓN: LANDING (HERO + FEATURES + PRICING)                          -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <main id="page-landing" class="page active">
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero__bg"></div>
+      <div class="container hero__content">
+        <span class="hero__badge">🚀 Plataforma de Automatización #1 en África Central</span>
+        <h1 class="hero__title">
+          Automatiza tus ventas.<br>
+          <span class="gradient-text">Conecta tu negocio con IA.</span>
+        </h1>
+        <p class="hero__subtitle">
+          Configura asistentes inteligentes que atienden clientes, gestionan pedidos y conectan 
+          servicios — disponibles 24/7 en tu web, WhatsApp o cualquier canal.
+        </p>
+        <div class="hero__cta">
+          <button class="btn btn--primary btn--lg" id="hero-cta">Crear mi Asistente Gratis</button>
+          <button class="btn btn--outline btn--lg" data-navigate="docs">Ver Documentación</button>
+        </div>
+        <div class="hero__stats">
+          <div class="hero__stat">
+            <span class="hero__stat-number">500+</span>
+            <span class="hero__stat-label">Negocios conectados</span>
+          </div>
+          <div class="hero__stat">
+            <span class="hero__stat-number">50K+</span>
+            <span class="hero__stat-label">Consultas automatizadas/mes</span>
+          </div>
+          <div class="hero__stat">
+            <span class="hero__stat-number">98%</span>
+            <span class="hero__stat-label">Satisfacción del cliente</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Empresas conectadas (social proof) -->
+    <section class="connected section">
+      <div class="container">
+        <p class="connected__label">Empresas que ya confían en Eteba Chat</p>
+        <div class="connected__logos">
+          <span class="connected__logo">Rotteri</span>
+          <span class="connected__logo">MalaboTech</span>
+          <span class="connected__logo">GE Express</span>
+          <span class="connected__logo">BataShop</span>
+          <span class="connected__logo">AfroPay</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features section" id="features">
+      <div class="container">
+        <div class="section__header">
+          <h2 class="section__title">Todo lo que tu negocio necesita</h2>
+          <p class="section__subtitle">Una plataforma. Múltiples soluciones. Cero complicaciones.</p>
+        </div>
+        <div class="features__grid">
+          <div class="feature-card">
+            <div class="feature-card__icon">🤖</div>
+            <h3 class="feature-card__title">Asistente IA Personalizado</h3>
+            <p class="feature-card__desc">Configura el tono, idioma y conocimiento de tu asistente. Entrénalo con tu catálogo o manual de servicios.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card__icon">🛒</div>
+            <h3 class="feature-card__title">Catálogo & Pedidos</h3>
+            <p class="feature-card__desc">Tus clientes buscan productos, ven precios en tiempo real y hacen pedidos directamente desde el chat.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card__icon">🔌</div>
+            <h3 class="feature-card__title">API & Integraciones</h3>
+            <p class="feature-card__desc">Genera API keys, conecta webhooks y automatiza flujos con tu sistema existente. REST API documentada.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card__icon">📊</div>
+            <h3 class="feature-card__title">Analytics en Tiempo Real</h3>
+            <p class="feature-card__desc">Métricas de conversaciones, productos más consultados, tasa de conversión y rendimiento del asistente.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card__icon">🌍</div>
+            <h3 class="feature-card__title">Multi-idioma & Multi-canal</h3>
+            <p class="feature-card__desc">Español, francés, inglés y lenguas locales. Funciona en tu web, WhatsApp Business y redes sociales.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card__icon">🔒</div>
+            <h3 class="feature-card__title">Seguridad Empresarial</h3>
+            <p class="feature-card__desc">Datos encriptados, autenticación OAuth, aislamiento multi-tenant. Tu información está protegida.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pricing section" id="page-pricing">
+      <div class="container">
+        <div class="section__header">
+          <h2 class="section__title">Planes para cada etapa</h2>
+          <p class="section__subtitle">Empieza gratis. Escala cuando crezcas.</p>
+        </div>
+        <div class="pricing__grid">
+          <div class="pricing-card">
+            <div class="pricing-card__header">
+              <h3>Starter</h3>
+              <div class="pricing-card__price">Gratis</div>
+              <p>Para emprendedores que empiezan</p>
+            </div>
+            <ul class="pricing-card__features">
+              <li>1 asistente activo</li>
+              <li>500 consultas/mes</li>
+              <li>Catálogo hasta 50 productos</li>
+              <li>Widget embebido</li>
+              <li>Soporte comunitario</li>
+            </ul>
+            <button class="btn btn--outline btn--full">Comenzar Gratis</button>
+          </div>
+          <div class="pricing-card pricing-card--popular">
+            <span class="pricing-card__badge">Popular</span>
+            <div class="pricing-card__header">
+              <h3>Business</h3>
+              <div class="pricing-card__price">25.000 <span>CFA/mes</span></div>
+              <p>Para negocios en crecimiento</p>
+            </div>
+            <ul class="pricing-card__features">
+              <li>5 asistentes activos</li>
+              <li>10.000 consultas/mes</li>
+              <li>Catálogo ilimitado</li>
+              <li>API & Webhooks</li>
+              <li>Analytics avanzados</li>
+              <li>Soporte prioritario</li>
+            </ul>
+            <button class="btn btn--primary btn--full">Elegir Business</button>
+          </div>
+          <div class="pricing-card">
+            <div class="pricing-card__header">
+              <h3>Enterprise</h3>
+              <div class="pricing-card__price">Personalizado</div>
+              <p>Para grandes empresas</p>
+            </div>
+            <ul class="pricing-card__features">
+              <li>Asistentes ilimitados</li>
+              <li>Consultas ilimitadas</li>
+              <li>Integraciones custom</li>
+              <li>SLA garantizado</li>
+              <li>Account manager dedicado</li>
+              <li>Despliegue on-premise</li>
+            </ul>
+            <button class="btn btn--outline btn--full">Contactar Ventas</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- SECCIÓN: EXPLORAR (Directorio de negocios conectados)                 -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <main id="page-explore" class="page">
+    <section class="section">
+      <div class="container">
+        <div class="section__header">
+          <h2 class="section__title">Explora Negocios</h2>
+          <p class="section__subtitle">Consulta catálogos, servicios y haz pedidos directamente con empresas verificadas.</p>
+        </div>
+        <div class="explore__search">
+          <input type="text" class="input input--lg" placeholder="Buscar negocios, productos o servicios..." id="explore-search">
+        </div>
+        <div class="explore__filters">
+          <button class="chip chip--active">Todos</button>
+          <button class="chip">Tiendas</button>
+          <button class="chip">Servicios</button>
+          <button class="chip">Restaurantes</button>
+          <button class="chip">Tecnología</button>
+        </div>
+        <div class="explore__grid" id="explore-grid">
+          <!-- Se llena dinámicamente -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- SECCIÓN: DASHBOARD (Panel del usuario autenticado)                    -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <main id="page-dashboard" class="page">
+    <div class="dashboard">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar__menu">
+          <a href="#" class="sidebar__item sidebar__item--active" data-tab="overview">
+            <span class="sidebar__icon">📊</span> Overview
+          </a>
+          <a href="#" class="sidebar__item" data-tab="conversations">
+            <span class="sidebar__icon">💬</span> Conversaciones
+          </a>
+          <a href="#" class="sidebar__item" data-tab="orders">
+            <span class="sidebar__icon">📦</span> Pedidos
+          </a>
+          <a href="#" class="sidebar__item" data-tab="catalog">
+            <span class="sidebar__icon">🏷️</span> Catálogo
+          </a>
+          <a href="#" class="sidebar__item" data-tab="config">
+            <span class="sidebar__icon">⚙️</span> Configuración
+          </a>
+          <a href="#" class="sidebar__item" data-tab="integrations">
+            <span class="sidebar__icon">🔌</span> Integraciones
+          </a>
+          <a href="#" class="sidebar__item" data-tab="api-keys">
+            <span class="sidebar__icon">🔑</span> API Keys
+          </a>
+        </div>
+      </aside>
+
+      <!-- Dashboard Content -->
+      <div class="dashboard__content">
+        <!-- Tab: Overview -->
+        <div class="dash-tab active" id="tab-overview">
+          <div class="dash-tab__header">
+            <h2>Bienvenido de vuelta</h2>
+            <p>Resumen de actividad de tu asistente</p>
+          </div>
+          <div class="metrics__grid">
+            <div class="metric-card">
+              <div class="metric-card__value">1,284</div>
+              <div class="metric-card__label">Consultas este mes</div>
+              <div class="metric-card__trend metric-card__trend--up">+12%</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-card__value">89</div>
+              <div class="metric-card__label">Pedidos generados</div>
+              <div class="metric-card__trend metric-card__trend--up">+8%</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-card__value">94%</div>
+              <div class="metric-card__label">Tasa de resolución</div>
+              <div class="metric-card__trend metric-card__trend--up">+3%</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-card__value">2.1s</div>
+              <div class="metric-card__label">Tiempo respuesta</div>
+              <div class="metric-card__trend metric-card__trend--down">-0.4s</div>
+            </div>
+          </div>
+          <div class="dash-tab__row">
+            <div class="card">
+              <h3 class="card__title">Últimos Pedidos</h3>
+              <div class="table-wrapper" id="recent-orders">
+                <p class="text-muted">Cargando pedidos...</p>
+              </div>
+            </div>
+            <div class="card">
+              <h3 class="card__title">Productos Más Consultados</h3>
+              <div id="top-products">
+                <p class="text-muted">Cargando datos...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Configuración -->
+        <div class="dash-tab" id="tab-config">
+          <div class="dash-tab__header">
+            <h2>Configuración del Asistente</h2>
+            <p>Personaliza cómo se comporta tu asistente de IA</p>
+          </div>
+          <div class="config__form">
+            <div class="form-group">
+              <label class="form-label">Nombre del Asistente</label>
+              <input type="text" class="input" placeholder="Ej: Asistente de Rotteri" id="config-name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Manual Operativo</label>
+              <textarea class="input input--textarea" rows="8" placeholder="Describe cómo debe comportarse tu asistente, qué tono usar, qué puede y no puede hacer..." id="config-manual"></textarea>
+              <span class="form-hint">Este texto guía todas las respuestas de la IA. Sé específico.</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Idiomas soportados</label>
+              <div class="checkbox-group">
+                <label class="checkbox"><input type="checkbox" checked> Español</label>
+                <label class="checkbox"><input type="checkbox"> Francés</label>
+                <label class="checkbox"><input type="checkbox"> Inglés</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tipo de negocio</label>
+              <select class="input" id="config-type">
+                <option value="store">Tienda / E-commerce</option>
+                <option value="services">Servicios profesionales</option>
+                <option value="restaurant">Restaurante / Delivery</option>
+                <option value="education">Educación / Cursos</option>
+                <option value="other">Otro</option>
+              </select>
+            </div>
+            <button class="btn btn--primary" id="btn-save-config">Guardar Configuración</button>
+          </div>
+        </div>
+
+        <!-- Tab: API Keys -->
+        <div class="dash-tab" id="tab-api-keys">
+          <div class="dash-tab__header">
+            <h2>API Keys & Integraciones</h2>
+            <p>Genera claves para conectar Eteba Chat con tu sistema</p>
+          </div>
+          <div class="api-keys__section">
+            <div class="card">
+              <h3 class="card__title">Tu Tenant ID</h3>
+              <div class="api-key__display">
+                <code id="display-tenant-id">—</code>
+                <button class="btn btn--ghost btn--sm" onclick="copyToClipboard('display-tenant-id')">Copiar</button>
+              </div>
+            </div>
+            <div class="card">
+              <h3 class="card__title">Widget — Código de Instalación</h3>
+              <pre class="code-block" id="widget-code">&lt;script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=TU_TENANT_ID"&gt;&lt;/script&gt;</pre>
+              <button class="btn btn--ghost btn--sm" onclick="copyToClipboard('widget-code')">Copiar código</button>
+            </div>
+            <div class="card">
+              <h3 class="card__title">API REST</h3>
+              <p class="text-muted">Endpoint principal para consultas programáticas:</p>
+              <pre class="code-block">POST https://eteba-chat.onrender.com/api/query
+Content-Type: application/json
+
+{
+  "tenantId": "tu-tenant-id",
+  "prompt": "¿Tienen zapatillas disponibles?"
+}</pre>
+              <button class="btn btn--primary btn--sm" id="btn-generate-key">Generar API Key</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Conversaciones -->
+        <div class="dash-tab" id="tab-conversations">
+          <div class="dash-tab__header">
+            <h2>Conversaciones en Vivo</h2>
+            <p>Monitorea las interacciones de tu asistente en tiempo real</p>
+          </div>
+          <div class="conversations__list" id="conversations-list">
+            <p class="text-muted">Las conversaciones aparecerán aquí en tiempo real...</p>
+          </div>
+        </div>
+
+        <!-- Tab: Pedidos -->
+        <div class="dash-tab" id="tab-orders">
+          <div class="dash-tab__header">
+            <h2>Pedidos</h2>
+            <p>Todos los pedidos generados a través de tu asistente</p>
+          </div>
+          <div class="table-wrapper" id="all-orders">
+            <p class="text-muted">Cargando pedidos...</p>
+          </div>
+        </div>
+
+        <!-- Tab: Catálogo -->
+        <div class="dash-tab" id="tab-catalog">
+          <div class="dash-tab__header">
+            <h2>Catálogo</h2>
+            <p>Gestiona los productos y servicios que tu asistente ofrece</p>
+          </div>
+          <div class="catalog__actions">
+            <button class="btn btn--primary" id="btn-add-product">+ Agregar Producto</button>
+            <button class="btn btn--ghost" id="btn-import-catalog">Importar CSV</button>
+          </div>
+          <div class="table-wrapper" id="catalog-table">
+            <p class="text-muted">Cargando catálogo...</p>
+          </div>
+        </div>
+
+        <!-- Tab: Integraciones -->
+        <div class="dash-tab" id="tab-integrations">
+          <div class="dash-tab__header">
+            <h2>Integraciones</h2>
+            <p>Conecta Eteba Chat con tus herramientas existentes</p>
+          </div>
+          <div class="integrations__grid">
+            <div class="integration-card">
+              <div class="integration-card__icon">💬</div>
+              <h4>WhatsApp Business</h4>
+              <p>Conecta tu número de WhatsApp</p>
+              <button class="btn btn--outline btn--sm">Próximamente</button>
+            </div>
+            <div class="integration-card">
+              <div class="integration-card__icon">🌐</div>
+              <h4>Widget Web</h4>
+              <p>Chat embebido en tu sitio</p>
+              <span class="badge badge--success">Activo</span>
+            </div>
+            <div class="integration-card">
+              <div class="integration-card__icon">🔗</div>
+              <h4>Webhooks</h4>
+              <p>Notificaciones HTTP en tiempo real</p>
+              <button class="btn btn--outline btn--sm">Configurar</button>
+            </div>
+            <div class="integration-card">
+              <div class="integration-card__icon">📱</div>
+              <h4>Telegram Bot</h4>
+              <p>Asistente en Telegram</p>
+              <button class="btn btn--outline btn--sm">Próximamente</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- SECCIÓN: DOCUMENTACIÓN                                                -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <main id="page-docs" class="page">
+    <div class="docs">
+      <aside class="docs__sidebar">
+        <h3 class="docs__sidebar-title">Documentación</h3>
+        <nav class="docs__nav">
+          <a href="#" class="docs__nav-item docs__nav-item--active" data-doc="intro">Introducción</a>
+          <a href="#" class="docs__nav-item" data-doc="quickstart">Inicio Rápido</a>
+          <a href="#" class="docs__nav-item" data-doc="widget">Widget Embebido</a>
+          <a href="#" class="docs__nav-item" data-doc="api-reference">API Reference</a>
+          <a href="#" class="docs__nav-item" data-doc="webhooks">Webhooks</a>
+          <a href="#" class="docs__nav-item" data-doc="auth">Autenticación</a>
+          <a href="#" class="docs__nav-item" data-doc="examples">Ejemplos</a>
+        </nav>
+      </aside>
+      <div class="docs__content" id="docs-content">
+        <article class="docs__article">
+          <h1>Introducción</h1>
+          <p>Eteba Chat es una plataforma de automatización comercial que permite a cualquier negocio 
+          crear asistentes virtuales inteligentes para atender clientes, gestionar consultas sobre 
+          productos/servicios y procesar pedidos automáticamente.</p>
+          
+          <h2>¿Cómo funciona?</h2>
+          <ol>
+            <li><strong>Regístrate</strong> — Crea tu cuenta con Google en segundos.</li>
+            <li><strong>Configura tu asistente</strong> — Define el manual operativo, tono y catálogo.</li>
+            <li><strong>Instala el widget</strong> — Una línea de código en tu sitio web.</li>
+            <li><strong>Tu asistente trabaja 24/7</strong> — Atiende clientes, busca productos y genera pedidos.</li>
+          </ol>
+
+          <h2>Arquitectura</h2>
+          <pre class="code-block">
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Tu Sitio   │────▶│  Eteba Chat API  │────▶│  Tu Base Datos  │
+│  (Widget)   │◀────│  (IA + Router)   │◀────│  (MySQL/PG)     │
+└─────────────┘     └──────────────────┘     └─────────────────┘
+                           │
+                    ┌──────┴──────┐
+                    │  OpenRouter  │
+                    │  (LLM Free) │
+                    └─────────────┘</pre>
+
+          <h2>Endpoints Principales</h2>
+          <table class="docs-table">
+            <thead>
+              <tr><th>Método</th><th>Endpoint</th><th>Descripción</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>POST</code></td><td>/api/query</td><td>Enviar consulta al asistente</td></tr>
+              <tr><td><code>POST</code></td><td>/api/ingest</td><td>Ingestar conocimiento (RAG)</td></tr>
+            </tbody>
+          </table>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- FOOTER                                                                 -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <footer class="footer">
+    <div class="container footer__content">
+      <div class="footer__brand">
+        <span class="nav__logo-icon">⚡</span>
+        <span class="nav__logo-text">Eteba<span class="nav__logo-accent">Chat</span></span>
+        <p class="footer__desc">Automatización inteligente para negocios africanos.</p>
+      </div>
+      <div class="footer__links">
+        <div class="footer__col">
+          <h4>Producto</h4>
+          <a href="#">Features</a>
+          <a href="#">Precios</a>
+          <a href="#">Docs</a>
+        </div>
+        <div class="footer__col">
+          <h4>Empresa</h4>
+          <a href="#">Sobre Nosotros</a>
+          <a href="#">Blog</a>
+          <a href="#">Contacto</a>
+        </div>
+        <div class="footer__col">
+          <h4>Legal</h4>
+          <a href="#">Privacidad</a>
+          <a href="#">Términos</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <p>&copy; 2024 Eteba Chat. Todos los derechos reservados.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="scripts/router.js"></script>
+  <script src="scripts/auth.js"></script>
+  <script src="scripts/dashboard.js"></script>
+  <script src="scripts/app.js"></script>
 </body>
 </html>
