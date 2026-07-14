@@ -1,30 +1,39 @@
-/* Eteba Chat - Embeddable Widget Styles */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ETEBA CHAT — Widget Embebido v2.0
+   Diseño profesional con paleta de marca (purple/blue/cyan)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --eteba-primary: #10b981; /* Emerald Green */
-  --eteba-bg-dark: #0f172a;  /* Dark slate blue */
-  --eteba-glass: rgba(15, 23, 42, 0.75);
-  --eteba-text: #f8fafc;
-  --eteba-text-muted: #94a3b8;
-  --eteba-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
-  --eteba-border: rgba(255, 255, 255, 0.08);
+  --eteba-w-purple: #9D4EDD;
+  --eteba-w-blue: #4361EE;
+  --eteba-w-cyan: #00B4D8;
+  --eteba-w-gradient: linear-gradient(135deg, #9D4EDD 0%, #4361EE 100%);
+  --eteba-w-bg: #141B2D;
+  --eteba-w-card: rgba(28, 37, 65, 0.85);
+  --eteba-w-border: rgba(255, 255, 255, 0.08);
+  --eteba-w-text: #F1F5F9;
+  --eteba-w-text-muted: #94A3B8;
+  --eteba-w-radius: 20px;
 }
 
+/* ─── Container ────────────────────────────────────────────────────────────── */
 .eteba-ai-widget-container {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 20px;
+  right: 20px;
   z-index: 999999;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: var(--eteba-text);
+  color: var(--eteba-w-text);
+  line-height: 1.5;
 }
 
-/* Launcher Button */
+/* ─── Launcher Button ──────────────────────────────────────────────────────── */
 .eteba-ai-launcher {
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: var(--eteba-primary);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  background: var(--eteba-w-gradient);
+  box-shadow: 0 4px 20px rgba(157, 78, 221, 0.35);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -34,12 +43,13 @@
 }
 
 .eteba-ai-launcher:hover {
-  transform: scale(1.08);
+  transform: scale(1.06);
+  box-shadow: 0 6px 28px rgba(157, 78, 221, 0.45);
 }
 
 .eteba-ai-launcher svg {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   fill: #ffffff;
   position: absolute;
   transition: transform 0.3s ease, opacity 0.3s ease;
@@ -47,26 +57,25 @@
 
 .eteba-ai-launcher .eteba-icon-close {
   opacity: 0;
-  transform: rotate(-90deg);
+  transform: rotate(-90deg) scale(0.5);
 }
 
 .eteba-ai-launcher.eteba-open {
-  transform: rotate(90deg);
-  background: #334155;
-  box-shadow: 0 6px 20px rgba(51, 65, 85, 0.4);
+  background: #1C2541;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 .eteba-ai-launcher.eteba-open .eteba-icon-chat {
   opacity: 0;
-  transform: rotate(90deg);
+  transform: rotate(90deg) scale(0.5);
 }
 
 .eteba-ai-launcher.eteba-open .eteba-icon-close {
   opacity: 1;
-  transform: rotate(0deg);
+  transform: rotate(0deg) scale(1);
 }
 
-/* Badge */
+/* ─── Badge ────────────────────────────────────────────────────────────────── */
 .eteba-ai-badge {
   position: absolute;
   top: -2px;
@@ -81,28 +90,27 @@
 
 .eteba-ai-badge.eteba-active {
   display: block;
+  animation: eteba-pulse 2s infinite;
 }
 
-/* Chat Window */
+/* ─── Chat Window ──────────────────────────────────────────────────────────── */
 .eteba-ai-window {
   position: absolute;
-  bottom: 80px;
+  bottom: 72px;
   right: 0;
-  width: 380px;
+  width: 370px;
   height: 520px;
-  border-radius: 20px;
-  background: var(--eteba-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--eteba-border);
-  box-shadow: var(--eteba-shadow);
+  border-radius: var(--eteba-w-radius);
+  background: var(--eteba-w-bg);
+  border: 1px solid var(--eteba-w-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.03);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   opacity: 0;
-  transform: translateY(20px) scale(0.95);
+  transform: translateY(16px) scale(0.96);
   pointer-events: none;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.2);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.15);
   transform-origin: bottom right;
 }
 
@@ -112,156 +120,193 @@
   pointer-events: auto;
 }
 
-/* Header */
+/* ─── Header ───────────────────────────────────────────────────────────────── */
 .eteba-ai-header {
-  padding: 16px 20px;
-  background: rgba(15, 23, 42, 0.4);
-  border-bottom: 1px solid var(--eteba-border);
+  padding: 16px 18px;
+  background: linear-gradient(135deg, rgba(157, 78, 221, 0.12) 0%, rgba(67, 97, 238, 0.08) 100%);
+  border-bottom: 1px solid var(--eteba-w-border);
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
 .eteba-ai-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background: rgba(16, 185, 129, 0.15);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--eteba-w-gradient);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .eteba-ai-avatar svg {
-  width: 20px;
-  height: 20px;
-  fill: var(--eteba-primary);
+  width: 18px;
+  height: 18px;
+  fill: #ffffff;
 }
 
 .eteba-ai-title h3 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  color: var(--eteba-text);
+  color: var(--eteba-w-text);
 }
 
 .eteba-ai-title p {
-  margin: 2px 0 0 0;
-  font-size: 0.78rem;
-  color: var(--eteba-primary);
+  margin: 1px 0 0 0;
+  font-size: 0.72rem;
+  color: var(--eteba-w-cyan);
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-/* Body */
+.eteba-ai-title p::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--eteba-w-cyan);
+  animation: eteba-pulse 2s infinite;
+}
+
+/* ─── Body ─────────────────────────────────────────────────────────────────── */
 .eteba-ai-body {
   flex: 1;
-  padding: 20px;
+  padding: 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(157, 78, 221, 0.3) transparent;
 }
 
+.eteba-ai-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.eteba-ai-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.eteba-ai-body::-webkit-scrollbar-thumb {
+  background: rgba(157, 78, 221, 0.3);
+  border-radius: 4px;
+}
+
+/* ─── Messages ─────────────────────────────────────────────────────────────── */
 .eteba-ai-msg {
-  max-width: 80%;
-  padding: 12px 16px;
-  border-radius: 16px;
-  font-size: 0.9rem;
-  line-height: 1.45;
+  max-width: 82%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  line-height: 1.5;
   word-wrap: break-word;
+  animation: eteba-fade-in 0.25s ease;
 }
 
 .eteba-ai-msg-bot {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--eteba-w-border);
   align-self: flex-start;
   border-top-left-radius: 4px;
   color: #e2e8f0;
 }
 
 .eteba-ai-msg-user {
-  background: var(--eteba-primary);
+  background: var(--eteba-w-gradient);
   align-self: flex-end;
   border-top-right-radius: 4px;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 2px 10px rgba(157, 78, 221, 0.2);
 }
 
-/* Footer Input Area */
+/* ─── Footer ───────────────────────────────────────────────────────────────── */
 .eteba-ai-footer {
-  padding: 16px 20px;
-  background: rgba(15, 23, 42, 0.4);
-  border-top: 1px solid var(--eteba-border);
+  padding: 12px 14px;
+  border-top: 1px solid var(--eteba-w-border);
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
+  background: rgba(28, 37, 65, 0.5);
 }
 
 .eteba-ai-input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--eteba-w-border);
+  padding: 10px 14px;
   border-radius: 12px;
-  color: var(--eteba-text);
-  font-size: 0.88rem;
+  color: var(--eteba-w-text);
+  font-size: 0.84rem;
   outline: none;
   transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.eteba-ai-input::placeholder {
+  color: var(--eteba-w-text-muted);
 }
 
 .eteba-ai-input:focus {
-  border-color: var(--eteba-primary);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--eteba-w-purple);
+  box-shadow: 0 0 0 2px rgba(157, 78, 221, 0.1);
 }
 
 .eteba-ai-send {
-  background: var(--eteba-primary);
+  background: var(--eteba-w-gradient);
   border: none;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+  flex-shrink: 0;
 }
 
 .eteba-ai-send:hover {
   transform: translateY(-1px);
-  background: #059669;
+  box-shadow: 0 4px 12px rgba(157, 78, 221, 0.3);
 }
 
 .eteba-ai-send svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   fill: #ffffff;
 }
 
 .eteba-ai-send:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
   transform: none;
 }
 
-/* Watermark */
+/* ─── Watermark ────────────────────────────────────────────────────────────── */
 .eteba-ai-watermark {
   text-align: center;
-  padding: 8px 0;
-  font-size: 0.72rem;
-  color: var(--eteba-text-muted);
-  background: rgba(15, 23, 42, 0.2);
-  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 6px 0;
+  font-size: 0.65rem;
+  color: var(--eteba-w-text-muted);
+  background: rgba(20, 27, 45, 0.4);
 }
 
 .eteba-ai-watermark a {
-  color: var(--eteba-primary);
+  background: var(--eteba-w-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
 }
 
-/* Typing Indicator Animation */
+/* ─── Typing Indicator ─────────────────────────────────────────────────────── */
 .typing-dots {
   display: flex;
   gap: 4px;
@@ -271,7 +316,7 @@
 .typing-dots span {
   width: 6px;
   height: 6px;
-  background: var(--eteba-text-muted);
+  background: var(--eteba-w-text-muted);
   border-radius: 50%;
   animation: eteba-bounce 1.4s infinite ease-in-out both;
 }
@@ -279,59 +324,44 @@
 .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
 .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
 
-@keyframes eteba-bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1.0); }
-}
-
-/* Mobile responsive */
-@media (max-width: 480px) {
-  .eteba-ai-window {
-    width: calc(100vw - 32px);
-    height: calc(100vh - 120px);
-    right: 0;
-    bottom: 74px;
-  }
-  .eteba-ai-widget-container {
-    bottom: 16px;
-    right: 16px;
-  }
-}
-
-/* Tarjetas de Producto en el Chat */
+/* ─── Product Cards ────────────────────────────────────────────────────────── */
 .eteba-ai-product-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--eteba-w-border);
+  border-radius: 12px;
   padding: 10px;
-  margin-top: 6px;
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   align-self: flex-start;
   width: 90%;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
   animation: eteba-fade-in 0.3s ease;
+  transition: border-color 0.2s ease;
+}
+
+.eteba-ai-product-card:hover {
+  border-color: rgba(157, 78, 221, 0.3);
 }
 
 .eteba-ai-product-img {
-  width: 70px;
-  height: 70px;
-  border-radius: 10px;
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
   object-fit: cover;
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: #1C2541;
+  border: 1px solid var(--eteba-w-border);
 }
 
 .eteba-ai-product-img-placeholder {
-  width: 70px;
-  height: 70px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  background: rgba(157, 78, 221, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
+  color: var(--eteba-w-purple);
 }
 
 .eteba-ai-product-info {
@@ -339,198 +369,91 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .eteba-ai-product-name {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  color: var(--eteba-text);
-  line-height: 1.25;
+  color: var(--eteba-w-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .eteba-ai-product-price {
-  font-size: 0.82rem;
-  color: var(--eteba-primary);
+  font-size: 0.78rem;
   font-weight: 700;
+  background: var(--eteba-w-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .eteba-ai-product-stock {
-  font-size: 0.7rem;
-  color: var(--eteba-text-muted);
+  font-size: 0.65rem;
+  color: var(--eteba-w-text-muted);
 }
 
 .eteba-ai-product-action {
-  background: var(--eteba-primary);
+  background: var(--eteba-w-gradient);
   border: none;
   color: #fff;
-  padding: 5px 9px;
+  padding: 5px 10px;
   border-radius: 6px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
-  margin-top: 4px;
+  margin-top: 3px;
   align-self: flex-start;
   transition: all 0.2s ease;
-}
-
-.eteba-ai-product-action:hover {
-  background: #059669;
-  transform: translateY(-1px);
-}
-
-@keyframes eteba-fade-in {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-
-/* ─── Tarjetas de Pedido (Formulario y Confirmación) ────────────────────────── */
-.eteba-ai-order-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  border-radius: 14px;
-  padding: 16px;
-  margin-top: 8px;
-  align-self: flex-start;
-  width: 92%;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-  animation: eteba-fade-in 0.3s ease;
-}
-
-.eteba-ai-order-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.eteba-ai-order-icon {
-  font-size: 1.2rem;
-}
-
-.eteba-ai-order-title {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--eteba-text);
-}
-
-.eteba-ai-order-ref {
-  margin-left: auto;
-  font-size: 0.72rem;
-  color: var(--eteba-primary);
-  font-weight: 600;
-  background: rgba(16, 185, 129, 0.1);
-  padding: 2px 8px;
-  border-radius: 6px;
-}
-
-/* Campos del formulario */
-.eteba-ai-order-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.eteba-ai-order-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.eteba-ai-order-field label {
-  font-size: 0.74rem;
-  color: var(--eteba-text-muted);
-  font-weight: 500;
-}
-
-.eteba-ai-order-input {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 10px 12px;
-  border-radius: 8px;
-  color: var(--eteba-text);
-  font-size: 0.84rem;
-  outline: none;
-  transition: border-color 0.2s ease;
   font-family: inherit;
 }
 
-.eteba-ai-order-input:focus {
-  border-color: var(--eteba-primary);
-}
-
-.eteba-ai-order-input::placeholder {
-  color: rgba(148, 163, 184, 0.6);
-}
-
-select.eteba-ai-order-input {
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
-}
-
-select.eteba-ai-order-input option {
-  background: #1e293b;
-  color: var(--eteba-text);
-}
-
-.eteba-ai-order-field-filled {
-  font-size: 0.8rem;
-  color: var(--eteba-primary);
-  padding: 6px 0;
-}
-
-/* Botón de enviar pedido */
-.eteba-ai-order-submit {
-  width: 100%;
-  margin-top: 12px;
-  padding: 11px 16px;
-  background: var(--eteba-primary);
-  border: none;
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
-}
-
-.eteba-ai-order-submit:hover {
-  background: #059669;
+.eteba-ai-product-action:hover {
+  opacity: 0.9;
   transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(157, 78, 221, 0.3);
 }
 
-.eteba-ai-order-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
+/* ─── Animations ───────────────────────────────────────────────────────────── */
+@keyframes eteba-bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1.0); }
 }
 
-/* Tarjeta de confirmación exitosa */
-.eteba-ai-order-success {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: rgba(16, 185, 129, 0.05);
+@keyframes eteba-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.eteba-ai-order-header-success {
-  border-bottom-color: rgba(16, 185, 129, 0.15);
+@keyframes eteba-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
-.eteba-ai-order-details {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+/* ─── Mobile ───────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .eteba-ai-widget-container {
+    bottom: 12px;
+    right: 12px;
+  }
 
-.eteba-ai-order-detail {
-  font-size: 0.82rem;
-  color: var(--eteba-text);
-  padding: 4px 0;
+  .eteba-ai-window {
+    width: calc(100vw - 24px);
+    height: calc(100vh - 100px);
+    right: 0;
+    bottom: 68px;
+    border-radius: 16px;
+  }
+
+  .eteba-ai-launcher {
+    width: 50px;
+    height: 50px;
+  }
+
+  .eteba-ai-launcher svg {
+    width: 20px;
+    height: 20px;
+  }
 }
