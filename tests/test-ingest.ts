@@ -1,4 +1,4 @@
-import { ingestKnowledge, insforge } from './ingest.js';
+import { ingestKnowledge, insforge } from '../ingest.js';
 
 (async () => {
   console.log('🚀 Iniciando pipeline de ingesta de prueba para Rotteri en ES Modules...');

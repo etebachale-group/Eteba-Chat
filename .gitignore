@@ -14,13 +14,15 @@ dist/
 # Archivos de sistema
 .DS_Store
 Thumbs.db
-
-# Logs
 *.log
 npm-debug.log*
 
-# Herramientas de agentes IA (no necesarias en el repo)
-.insforge
+# IDE
+.vscode/
+.idea/
+
+# Herramientas de agentes IA
+.insforge/
 .agents
 .agent
 .augment
@@ -33,6 +35,3 @@ npm-debug.log*
 .qoder
 .qwen
 .trae
-
-# Archivos temporales de test
-out.txt
