@@ -9,7 +9,7 @@ const { Pool } = pg;
 
 // 1. Validar variables de entorno clave
 const databaseUrl = process.env.DATABASE_URL;
-const geminiKey = process.env.GEMINI_API_KEY || '';
+const groqKey = process.env.GROQ_API_KEY || '';
 const openrouterKey = process.env.OPENROUTER_API_KEY || '';
 const baseUrl = process.env.INSFORGE_BASE_URL;
 const apiKey = process.env.INSFORGE_API_KEY;
@@ -19,8 +19,8 @@ if (!databaseUrl || !baseUrl || !apiKey) {
   process.exit(1);
 }
 
-if (!geminiKey && !openrouterKey) {
-  console.error('❌ Error: Se necesita GEMINI_API_KEY o OPENROUTER_API_KEY');
+if (!groqKey && !openrouterKey) {
+  console.error('❌ Error: Se necesita GROQ_API_KEY o OPENROUTER_API_KEY');
   process.exit(1);
 }
 
@@ -90,81 +90,80 @@ async function getCachedOperationalManual(tenantId: string): Promise<string | nu
   }
 }
 
-// 4. Cliente Gemini API (directo, sin OpenRouter)
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+// 4. Cliente IA — Groq (primario) + OpenRouter (fallback)
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-interface GeminiResponse {
-  candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
-}
-
-async function callGemini(systemPrompt: string, userMessage: string, maxTokens: number = 300): Promise<string> {
-  // Intentar Gemini directo si hay key
-  if (geminiKey) {
+async function callLLM(systemPrompt: string, userMessage: string, maxTokens: number = 300): Promise<string> {
+  // 1. Intentar Groq (ultra-rápido, <1s)
+  if (groqKey) {
     try {
-      const resp = await fetch(GEMINI_URL, {
+      const resp = await fetch(GROQ_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-goog-api-key': geminiKey,
+          'Authorization': `Bearer ${groqKey}`,
         },
         body: JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: userMessage }] }
+          model: 'llama-3.1-8b-instant',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage }
           ],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: maxTokens,
-          }
+          max_tokens: maxTokens,
+          temperature: 0.3,
         }),
       });
 
       if (resp.ok) {
-        const data = await resp.json() as GeminiResponse;
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) return text;
+        const data = await resp.json() as any;
+        const content = data.choices?.[0]?.message?.content;
+        if (content) return content;
       } else {
         const errText = await resp.text();
-        console.error(`❌ Gemini error [${resp.status}]:`, errText.substring(0, 200));
+        console.error(`❌ Groq error [${resp.status}]:`, errText.substring(0, 200));
       }
     } catch (err: any) {
-      console.error('❌ Gemini fetch error:', err.message);
+      console.error('❌ Groq fetch error:', err.message);
     }
   }
 
-  // Fallback: OpenRouter
-  return await callOpenRouterFallback(systemPrompt, userMessage, maxTokens);
-}
+  // 2. Fallback: OpenRouter
+  if (openrouterKey) {
+    try {
+      console.log('⚠️ Usando fallback OpenRouter...');
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openrouterKey}`,
+          'HTTP-Referer': 'https://eteba-chat.onrender.com',
+          'X-Title': 'Eteba Chat',
+        },
+        body: JSON.stringify({
+          model: 'meta-llama/llama-3.1-8b-instruct:free',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage }
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.3,
+        }),
+      });
 
-/** Fallback a OpenRouter si Gemini falla */
-async function callOpenRouterFallback(systemPrompt: string, userMessage: string, maxTokens: number): Promise<string> {
-  if (!openrouterKey) return 'Disculpe, el servicio no está disponible en este momento.';
-
-  console.log('⚠️ Usando fallback OpenRouter...');
-  try {
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openrouterKey}`,
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-exp:free',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
-        ],
-        max_tokens: maxTokens,
-        temperature: 0.3,
-      }),
-    });
-
-    if (!resp.ok) return 'Disculpe, hubo un problema. Intente de nuevo.';
-    const data = await resp.json() as any;
-    return data.choices?.[0]?.message?.content || 'Disculpe, ¿podría repetir su consulta?';
-  } catch {
-    return 'Disculpe, el servicio no está disponible en este momento.';
+      if (resp.ok) {
+        const data = await resp.json() as any;
+        const content = data.choices?.[0]?.message?.content;
+        if (content) return content;
+      } else {
+        const errText = await resp.text();
+        console.error(`❌ OpenRouter error [${resp.status}]:`, errText.substring(0, 200));
+      }
+    } catch (err: any) {
+      console.error('❌ OpenRouter fetch error:', err.message);
+    }
   }
+
+  return 'Disculpe, el servicio no está disponible en este momento. Intente más tarde.';
 }
 
 /**
@@ -190,7 +189,7 @@ async function generateHumanResponse(
 
 ${contextString ? `DATOS CONSULTADOS:\n${contextString}\n` : ''}REGLAS: Responde en base al contexto. NO inventes datos. Si hay productos, menciona nombre y precio. Sé conciso.`;
 
-  return await callGemini(systemPrompt, userQuery, 300);
+  return await callLLM(systemPrompt, userQuery, 300);
 }
 
 /**
@@ -334,7 +333,7 @@ export async function hybridQuery(tenantId: string, userQuery: string) {
     const extractionPrompt = `Extrae datos de pedido del mensaje. Responde SOLO con JSON válido:
 {"customer_name": "nombre o null", "phone": "teléfono o null", "address": "ciudad o null", "product_name": "producto o null"}`;
 
-    const rawJson = await callGemini(extractionPrompt, userQuery, 150);
+    const rawJson = await callLLM(extractionPrompt, userQuery, 150);
     const jsonMatch = rawJson.match(/\{[\s\S]*\}/);
     const cleanJson = jsonMatch ? jsonMatch[0] : rawJson;
 
@@ -419,7 +418,7 @@ export async function hybridQuery(tenantId: string, userQuery: string) {
 - Producto: ${data.product_name}${precioProd > 0 ? ` - ${precioProd.toLocaleString('es-ES')} CFA` : ''}
 Confirma de forma cálida y breve. Menciona la referencia si existe.`;
 
-      humanResponse = await callGemini(
+      humanResponse = await callLLM(
         operationalManual || 'Eres un asistente de ventas amable.',
         successPrompt,
         200

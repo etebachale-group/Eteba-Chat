@@ -324,5 +324,7 @@ app.listen(PORT, () => {
   console.log(`\n======================================================`);
   console.log(`🚀 Servidor Antigravity RAG levantado con éxito.`);
   console.log(`👉 Visita: http://localhost:${PORT}`);
+  console.log(`📌 Groq: ${process.env.GROQ_API_KEY ? 'SET' : 'NOT SET'}`);
+  console.log(`📌 OpenRouter: ${process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET'}`);
   console.log(`======================================================\n`);
 });
