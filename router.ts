@@ -92,29 +92,70 @@ interface GeminiResponse {
 }
 
 async function callGemini(systemPrompt: string, userMessage: string, maxTokens: number = 300): Promise<string> {
-  const resp = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        { role: 'user', parts: [{ text: userMessage }] }
-      ],
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: maxTokens,
-      }
-    }),
-  });
+  try {
+    const resp = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': geminiKey!,
+      },
+      body: JSON.stringify({
+        contents: [
+          { role: 'user', parts: [{ text: userMessage }] }
+        ],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: maxTokens,
+        }
+      }),
+    });
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    console.error('❌ Gemini API error:', resp.status, errText);
-    return 'Disculpe, hubo un error procesando su consulta. Intente de nuevo.';
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error(`❌ Gemini API error [${resp.status}]:`, errText.substring(0, 500));
+      // Fallback a OpenRouter si existe la key
+      return await callOpenRouterFallback(systemPrompt, userMessage, maxTokens);
+    }
+
+    const data = await resp.json() as GeminiResponse;
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Disculpe, ¿podría repetir su consulta?';
+  } catch (err: any) {
+    console.error('❌ Gemini fetch error:', err.message);
+    return await callOpenRouterFallback(systemPrompt, userMessage, maxTokens);
   }
+}
 
-  const data = await resp.json() as GeminiResponse;
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Disculpe, ¿podría repetir su consulta?';
+/** Fallback a OpenRouter si Gemini falla */
+async function callOpenRouterFallback(systemPrompt: string, userMessage: string, maxTokens: number): Promise<string> {
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  if (!openrouterKey) return 'Disculpe, el servicio no está disponible en este momento.';
+
+  console.log('⚠️ Usando fallback OpenRouter...');
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openrouterKey}`,
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-exp:free',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage }
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.3,
+      }),
+    });
+
+    if (!resp.ok) return 'Disculpe, hubo un problema. Intente de nuevo.';
+    const data = await resp.json() as any;
+    return data.choices?.[0]?.message?.content || 'Disculpe, ¿podría repetir su consulta?';
+  } catch {
+    return 'Disculpe, el servicio no está disponible en este momento.';
+  }
 }
 
 /**
