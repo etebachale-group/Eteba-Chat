@@ -32,9 +32,17 @@
     document.querySelectorAll('.docs__nav-item').forEach(item => {
       item.addEventListener('click', (e) => {
         e.preventDefault();
+        const docId = item.dataset.doc;
+        if (!docId) return;
+
+        // Actualizar nav activa
         document.querySelectorAll('.docs__nav-item').forEach(i => i.classList.remove('docs__nav-item--active'));
         item.classList.add('docs__nav-item--active');
-        // TODO: Cargar contenido de documentación dinámicamente
+
+        // Mostrar sección correspondiente
+        document.querySelectorAll('.docs__section').forEach(section => section.classList.remove('active'));
+        const target = document.getElementById(`doc-${docId}`);
+        if (target) target.classList.add('active');
       });
     });
   }

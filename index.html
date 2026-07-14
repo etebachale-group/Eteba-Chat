@@ -478,43 +478,417 @@ Content-Type: application/json
         </nav>
       </aside>
       <div class="docs__content" id="docs-content">
-        <article class="docs__article">
+
+        <!-- DOC: Introducción -->
+        <article class="docs__article docs__section active" id="doc-intro">
           <h1>Introducción</h1>
-          <p>Eteba Chat es una plataforma de automatización comercial que permite a cualquier negocio 
-          crear asistentes virtuales inteligentes para atender clientes, gestionar consultas sobre 
-          productos/servicios y procesar pedidos automáticamente.</p>
-          
+          <p>Eteba Chat es una plataforma de automatización comercial con IA que permite a cualquier 
+          negocio — tiendas, empresas de servicios, restaurantes, agencias — crear asistentes virtuales 
+          inteligentes que atienden clientes, gestionan consultas sobre productos/servicios y procesan 
+          pedidos automáticamente las 24 horas.</p>
+
+          <h2>¿Para quién es?</h2>
+          <ul>
+            <li><strong>Tiendas online y físicas</strong> — Automatiza consultas de inventario, precios y pedidos</li>
+            <li><strong>Empresas de servicios</strong> — Responde preguntas frecuentes y agenda citas</li>
+            <li><strong>Restaurantes y delivery</strong> — Muestra menús y recibe órdenes por chat</li>
+            <li><strong>Cualquier negocio</strong> — Si tienes clientes que hacen preguntas, Eteba Chat te ahorra tiempo</li>
+          </ul>
+
           <h2>¿Cómo funciona?</h2>
           <ol>
             <li><strong>Regístrate</strong> — Crea tu cuenta con Google en segundos.</li>
-            <li><strong>Configura tu asistente</strong> — Define el manual operativo, tono y catálogo.</li>
+            <li><strong>Configura tu asistente</strong> — Define el manual operativo, tono, idioma y catálogo de productos/servicios.</li>
             <li><strong>Instala el widget</strong> — Una línea de código en tu sitio web.</li>
-            <li><strong>Tu asistente trabaja 24/7</strong> — Atiende clientes, busca productos y genera pedidos.</li>
+            <li><strong>Tu asistente trabaja 24/7</strong> — Atiende clientes, busca en tu catálogo en tiempo real y genera pedidos.</li>
           </ol>
 
-          <h2>Arquitectura</h2>
+          <h2>Arquitectura del Sistema</h2>
           <pre class="code-block">
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Tu Sitio   │────▶│  Eteba Chat API  │────▶│  Tu Base Datos  │
-│  (Widget)   │◀────│  (IA + Router)   │◀────│  (MySQL/PG)     │
-└─────────────┘     └──────────────────┘     └─────────────────┘
-                           │
-                    ┌──────┴──────┐
-                    │  OpenRouter  │
-                    │  (LLM Free) │
-                    └─────────────┘</pre>
+┌──────────────────┐      ┌─────────────────────────┐      ┌──────────────────┐
+│   Tu Sitio Web   │      │     Eteba Chat API      │      │  Tu Base Datos   │
+│   (Widget JS)    │─────▶│   (Router IA + RAG)     │─────▶│  (MySQL / PG)    │
+│                  │◀─────│                         │◀─────│                  │
+└──────────────────┘      └─────────────────────────┘      └──────────────────┘
+                                     │
+                              ┌──────┴──────┐
+                              │  OpenRouter  │
+                              │  (LLM IA)   │
+                              └─────────────┘</pre>
 
-          <h2>Endpoints Principales</h2>
+          <h2>Características Principales</h2>
           <table class="docs-table">
             <thead>
-              <tr><th>Método</th><th>Endpoint</th><th>Descripción</th></tr>
+              <tr><th>Feature</th><th>Descripción</th></tr>
             </thead>
             <tbody>
-              <tr><td><code>POST</code></td><td>/api/query</td><td>Enviar consulta al asistente</td></tr>
-              <tr><td><code>POST</code></td><td>/api/ingest</td><td>Ingestar conocimiento (RAG)</td></tr>
+              <tr><td>Asistente IA</td><td>Respuestas inteligentes basadas en tu manual operativo y catálogo</td></tr>
+              <tr><td>Búsqueda en tiempo real</td><td>Consulta tu inventario/servicios al instante desde el chat</td></tr>
+              <tr><td>Gestión de pedidos</td><td>Captura datos del cliente y registra pedidos automáticamente</td></tr>
+              <tr><td>Multi-tenant</td><td>Cada negocio tiene su espacio aislado y personalizado</td></tr>
+              <tr><td>RAG Semántico</td><td>Busca en documentos de conocimiento (envíos, políticas, FAQ)</td></tr>
+              <tr><td>Multi-idioma</td><td>Español, francés, inglés y adaptable a lenguas locales</td></tr>
             </tbody>
           </table>
         </article>
+
+        <!-- DOC: Inicio Rápido -->
+        <article class="docs__article docs__section" id="doc-quickstart">
+          <h1>Inicio Rápido</h1>
+          <p>Pon tu asistente en funcionamiento en menos de 5 minutos.</p>
+
+          <h2>Paso 1: Crear cuenta</h2>
+          <p>Haz click en "Comenzar Gratis" y autentícate con tu cuenta de Google. Se creará 
+          automáticamente tu tenant (espacio de trabajo aislado).</p>
+
+          <h2>Paso 2: Configurar tu asistente</h2>
+          <p>En el Dashboard → Configuración, define:</p>
+          <ul>
+            <li><strong>Nombre</strong> — Cómo se presenta tu asistente (ej: "Asistente de MiTienda")</li>
+            <li><strong>Manual Operativo</strong> — Instrucciones de comportamiento. Ejemplo:</li>
+          </ul>
+          <pre class="code-block">Eres el asistente virtual de MiTienda. Hablas en español de forma amable.
+Cuando te pregunten por productos, busca en el catálogo.
+Si un cliente quiere comprar, pídele: nombre, teléfono y ciudad de entrega.
+No inventes productos que no están en el inventario.</pre>
+
+          <h2>Paso 3: Instalar el widget</h2>
+          <p>Copia este código y pégalo antes del cierre <code>&lt;/body&gt;</code> en tu sitio web:</p>
+          <pre class="code-block">&lt;script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=TU_TENANT_ID"&gt;&lt;/script&gt;</pre>
+          <p>Reemplaza <code>TU_TENANT_ID</code> con el ID que aparece en Dashboard → API Keys.</p>
+
+          <h2>Paso 4: Probar</h2>
+          <p>Visita tu sitio web. Verás un botón verde en la esquina inferior derecha. 
+          Haz click y prueba una consulta como "¿Qué productos tienen?"</p>
+
+          <h2>¿Qué sigue?</h2>
+          <ul>
+            <li>Agrega productos a tu catálogo desde el Dashboard</li>
+            <li>Configura un proxy PHP si usas MySQL externo</li>
+            <li>Ingesta documentos de conocimiento (políticas, FAQ, tarifas) con la API de ingesta</li>
+          </ul>
+        </article>
+
+        <!-- DOC: Widget Embebido -->
+        <article class="docs__article docs__section" id="doc-widget">
+          <h1>Widget Embebido</h1>
+          <p>El widget es un componente JavaScript autocontenido que se inyecta en cualquier sitio web 
+          y proporciona una interfaz de chat flotante.</p>
+
+          <h2>Instalación</h2>
+          <pre class="code-block">&lt;!-- Pegar antes de &lt;/body&gt; --&gt;
+&lt;script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=TU_TENANT_ID"&gt;&lt;/script&gt;</pre>
+
+          <h2>Parámetros</h2>
+          <table class="docs-table">
+            <thead>
+              <tr><th>Parámetro</th><th>Tipo</th><th>Requerido</th><th>Descripción</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>tenant_id</code></td><td>UUID</td><td>Sí</td><td>Identifica tu negocio. Se obtiene del Dashboard.</td></tr>
+            </tbody>
+          </table>
+
+          <h2>Comportamiento</h2>
+          <ul>
+            <li>Se posiciona en la esquina inferior derecha (configurable por CSS)</li>
+            <li>Carga el CSS automáticamente desde el mismo servidor</li>
+            <li>Detecta automáticamente si está en producción o desarrollo</li>
+            <li>Muestra tarjetas de producto con imagen, precio y botón "Encargar"</li>
+            <li>Responsive — se adapta a móvil y desktop</li>
+          </ul>
+
+          <h2>Personalización CSS</h2>
+          <p>Puedes sobreescribir los estilos del widget usando selectores con mayor especificidad:</p>
+          <pre class="code-block">/* Cambiar color primario del widget */
+.eteba-ai-widget-container {
+  --eteba-primary: #8b5cf6; /* Violeta en vez de verde */
+}
+
+/* Cambiar posición */
+.eteba-ai-widget-container {
+  bottom: 100px;
+  right: 40px;
+}</pre>
+
+          <h2>Eventos</h2>
+          <p>El widget dispara eventos en <code>window</code> que puedes escuchar:</p>
+          <pre class="code-block">// Cuando el usuario envía un mensaje
+window.addEventListener('eteba:message-sent', (e) => {
+  console.log('Usuario preguntó:', e.detail.message);
+});
+
+// Cuando el bot responde
+window.addEventListener('eteba:response', (e) => {
+  console.log('Bot respondió:', e.detail.response);
+});</pre>
+        </article>
+
+        <!-- DOC: API Reference -->
+        <article class="docs__article docs__section" id="doc-api-reference">
+          <h1>API Reference</h1>
+          <p>La API REST de Eteba Chat te permite integrar el asistente en cualquier sistema, 
+          app móvil o workflow automatizado.</p>
+
+          <h2>Base URL</h2>
+          <pre class="code-block">https://eteba-chat.onrender.com</pre>
+
+          <h2>Endpoints</h2>
+
+          <h3>POST /api/query</h3>
+          <p>Envía una consulta al asistente y recibe la respuesta procesada.</p>
+          <pre class="code-block">POST /api/query
+Content-Type: application/json
+
+{
+  "tenantId": "e22e9ee0-d29a-4172-88de-fb9ad14c9c1b",
+  "prompt": "¿Tienen zapatillas Nike disponibles?"
+}</pre>
+
+          <h3>Respuesta exitosa (200)</h3>
+          <pre class="code-block">{
+  "type": "SQL",
+  "results": [
+    {
+      "name": "Zapatilla Nike Air Max",
+      "price": "45000",
+      "stock": 3,
+      "description": "Zapatilla deportiva Nike Air Max talla 42",
+      "image_url": "uploads/productos/nike-air.jpg"
+    }
+  ],
+  "humanResponse": "¡Sí! Tenemos las Zapatillas Nike Air Max disponibles..."
+}</pre>
+
+          <h3>Tipos de respuesta</h3>
+          <table class="docs-table">
+            <thead>
+              <tr><th>type</th><th>Descripción</th><th>Cuándo se retorna</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>SQL</code></td><td>Resultados de catálogo en tiempo real</td><td>Consultas de productos, precios, stock</td></tr>
+              <tr><td><code>SEMANTIC</code></td><td>Resultados de búsqueda semántica (RAG)</td><td>Consultas sobre envíos, políticas, FAQ</td></tr>
+              <tr><td><code>SALUDO_SOPORTE_GENERAL</code></td><td>Respuesta conversacional</td><td>Saludos, pedidos, soporte general</td></tr>
+            </tbody>
+          </table>
+
+          <h3>POST /api/ingest</h3>
+          <p>Ingesta contenido de conocimiento para la búsqueda semántica (RAG). Útil para cargar 
+          políticas, FAQ, tarifas de envío, etc.</p>
+          <pre class="code-block">POST /api/ingest
+Content-Type: application/json
+
+{
+  "tenantId": "e22e9ee0-d29a-4172-88de-fb9ad14c9c1b",
+  "content": "Tarifas de envío: Malabo 2000 CFA, Bata 3000 CFA. Entregas de lunes a viernes."
+}</pre>
+
+          <h3>Respuesta exitosa (200)</h3>
+          <pre class="code-block">{
+  "success": true,
+  "data": { "chunks_processed": 1 }
+}</pre>
+
+          <h2>Errores</h2>
+          <table class="docs-table">
+            <thead>
+              <tr><th>Código</th><th>Significado</th><th>Causa común</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>400</td><td>Bad Request</td><td>Falta <code>tenantId</code> o <code>prompt</code></td></tr>
+              <tr><td>500</td><td>Internal Error</td><td>Error en la IA, DB o proxy PHP</td></tr>
+            </tbody>
+          </table>
+        </article>
+
+        <!-- DOC: Webhooks -->
+        <article class="docs__article docs__section" id="doc-webhooks">
+          <h1>Webhooks</h1>
+          <p>Recibe notificaciones HTTP en tiempo real cuando ocurren eventos en tu asistente.</p>
+
+          <h2>Eventos disponibles</h2>
+          <table class="docs-table">
+            <thead>
+              <tr><th>Evento</th><th>Descripción</th><th>Payload</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>order.created</code></td>
+                <td>Se creó un nuevo pedido</td>
+                <td>Datos del pedido completo</td>
+              </tr>
+              <tr>
+                <td><code>conversation.started</code></td>
+                <td>Un usuario inició una conversación</td>
+                <td>Timestamp + metadata</td>
+              </tr>
+              <tr>
+                <td><code>product.queried</code></td>
+                <td>Se consultó un producto del catálogo</td>
+                <td>Nombre del producto + resultado</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h2>Configuración</h2>
+          <p>Desde Dashboard → Integraciones → Webhooks, agrega la URL de tu endpoint:</p>
+          <pre class="code-block">https://tu-servidor.com/webhooks/eteba</pre>
+
+          <h2>Payload de ejemplo (order.created)</h2>
+          <pre class="code-block">{
+  "event": "order.created",
+  "timestamp": "2024-07-14T12:30:00Z",
+  "data": {
+    "id": 142,
+    "producto_nombre": "Zapatilla Nike Air Max",
+    "cliente_nombre": "Juan Ndong",
+    "cliente_telefono": "+240 222 334 455",
+    "ciudad_entrega": "Malabo",
+    "precio_producto": 45000,
+    "tienda_id": 1
+  }
+}</pre>
+
+          <h2>Verificación de firma</h2>
+          <p>Cada webhook incluye un header <code>X-Eteba-Signature</code> con un HMAC-SHA256 
+          del body usando tu webhook secret. Valídalo para asegurar autenticidad:</p>
+          <pre class="code-block">const crypto = require('crypto');
+const signature = req.headers['x-eteba-signature'];
+const expected = crypto
+  .createHmac('sha256', WEBHOOK_SECRET)
+  .update(JSON.stringify(req.body))
+  .digest('hex');
+
+if (signature !== expected) {
+  return res.status(401).send('Invalid signature');
+}</pre>
+        </article>
+
+        <!-- DOC: Autenticación -->
+        <article class="docs__article docs__section" id="doc-auth">
+          <h1>Autenticación</h1>
+          <p>Eteba Chat usa OAuth 2.0 con Google como proveedor de identidad, gestionado por InsForge Auth.</p>
+
+          <h2>Flujo de autenticación</h2>
+          <ol>
+            <li>El usuario hace click en "Iniciar Sesión con Google"</li>
+            <li>Se redirige a InsForge Auth → Google OAuth consent</li>
+            <li>Google devuelve un token de acceso</li>
+            <li>InsForge crea/asocia el usuario y devuelve un <code>access_token</code></li>
+            <li>El frontend almacena el token y lo usa para requests autenticados</li>
+          </ol>
+
+          <h2>Uso del token</h2>
+          <pre class="code-block">// El token se envía en el header Authorization
+fetch('https://eteba-chat.onrender.com/api/protected-endpoint', {
+  headers: {
+    'Authorization': 'Bearer TU_ACCESS_TOKEN',
+    'Content-Type': 'application/json'
+  }
+});</pre>
+
+          <h2>Multi-tenant</h2>
+          <p>Cada usuario autenticado tiene un <code>tenant_id</code> (UUID) que aísla sus datos:</p>
+          <ul>
+            <li>Los productos, pedidos y conocimiento RAG son exclusivos de cada tenant</li>
+            <li>El widget identifica el tenant por el parámetro <code>tenant_id</code> en la URL del script</li>
+            <li>Las políticas RLS (Row Level Security) en la base de datos garantizan el aislamiento</li>
+          </ul>
+        </article>
+
+        <!-- DOC: Ejemplos -->
+        <article class="docs__article docs__section" id="doc-examples">
+          <h1>Ejemplos de Integración</h1>
+
+          <h2>1. Consulta simple con cURL</h2>
+          <pre class="code-block">curl -X POST https://eteba-chat.onrender.com/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenantId": "e22e9ee0-d29a-4172-88de-fb9ad14c9c1b",
+    "prompt": "¿Qué zapatillas tienen disponibles?"
+  }'</pre>
+
+          <h2>2. Integración con JavaScript (frontend)</h2>
+          <pre class="code-block">async function askAssistant(question) {
+  const response = await fetch('https://eteba-chat.onrender.com/api/query', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tenantId: 'TU_TENANT_ID',
+      prompt: question
+    })
+  });
+  
+  const data = await response.json();
+  console.log('Respuesta IA:', data.humanResponse);
+  
+  // Si hay productos, mostrarlos
+  if (data.type === 'SQL' && data.results.length > 0) {
+    data.results.forEach(product => {
+      console.log(`- ${product.name}: ${product.price} CFA (Stock: ${product.stock})`);
+    });
+  }
+  
+  return data;
+}
+
+// Uso
+askAssistant('¿Tienen auriculares?');</pre>
+
+          <h2>3. Integración con Python</h2>
+          <pre class="code-block">import requests
+
+def query_eteba(tenant_id, question):
+    response = requests.post(
+        'https://eteba-chat.onrender.com/api/query',
+        json={
+            'tenantId': tenant_id,
+            'prompt': question
+        }
+    )
+    data = response.json()
+    return data['humanResponse']
+
+# Uso
+answer = query_eteba('TU_TENANT_ID', '¿Cuánto cuesta el envío a Bata?')
+print(answer)</pre>
+
+          <h2>4. Ingesta de conocimiento</h2>
+          <pre class="code-block">// Cargar información sobre envíos para la búsqueda semántica
+const knowledge = `
+  Tarifas de envío:
+  - Malabo: 2,000 CFA (entrega en 24h)
+  - Bata: 3,500 CFA (entrega en 48h) 
+  - Otras ciudades: consultar disponibilidad
+  
+  Métodos de pago: efectivo contra entrega, transferencia móvil
+`;
+
+await fetch('https://eteba-chat.onrender.com/api/ingest', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    tenantId: 'TU_TENANT_ID',
+    content: knowledge
+  })
+});</pre>
+
+          <h2>5. Widget con configuración personalizada (HTML)</h2>
+          <pre class="code-block">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;Mi Tienda&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;h1&gt;Bienvenido a Mi Tienda&lt;/h1&gt;
+  &lt;p&gt;Pregúntale a nuestro asistente sobre productos y precios.&lt;/p&gt;
+  
+  &lt;!-- Eteba Chat Widget --&gt;
+  &lt;script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=TU_TENANT_ID"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</pre>
+        </article>
+
       </div>
     </div>
   </main>

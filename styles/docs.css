@@ -63,6 +63,14 @@
   max-width: 800px;
 }
 
+.docs__section {
+  display: none;
+}
+
+.docs__section.active {
+  display: block;
+}
+
 .docs__article h1 {
   font-size: var(--font-size-3xl);
   font-weight: 700;
@@ -109,6 +117,26 @@
 .docs__article pre.code-block {
   margin: var(--space-lg) 0;
   line-height: 1.5;
+}
+
+.docs__article h3 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin-top: var(--space-xl);
+  margin-bottom: var(--space-sm);
+  color: var(--color-text);
+}
+
+.docs__article ul {
+  margin-bottom: var(--space-lg);
+  padding-left: var(--space-xl);
+  list-style: disc;
+}
+
+.docs__article ul li {
+  color: var(--color-text-secondary);
+  line-height: 1.8;
+  margin-bottom: var(--space-xs);
 }
 
 /* ─── Docs Table ───────────────────────────────────────────────────────────── */
