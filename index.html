@@ -530,6 +530,7 @@ Content-Type: application/json
           <a href="#" class="docs__nav-item" data-doc="webhooks">Webhooks</a>
           <a href="#" class="docs__nav-item" data-doc="auth">Autenticación</a>
           <a href="#" class="docs__nav-item" data-doc="examples">Ejemplos</a>
+          <a href="#" class="docs__nav-item" data-doc="vibecoder">Prompt Vibecoder</a>
         </nav>
       </aside>
       <div class="docs__content" id="docs-content">
@@ -961,6 +962,89 @@ await fetch('https://eteba-chat.onrender.com/api/ingest', {
   &lt;script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=TU_TENANT_ID"&gt;&lt;/script&gt;
 &lt;/body&gt;
 &lt;/html&gt;</pre>
+        </article>
+
+        <!-- DOC: Prompt Vibecoder -->
+        <article class="docs__article docs__section" id="doc-vibecoder">
+          <h1>Prompt para Vibecoders</h1>
+          <p>Si usas un asistente de IA para codear (Cursor, Claude, ChatGPT, Windsurf, Copilot, etc.), 
+          copia este prompt y pégalo en tu herramienta. La IA generará toda la integración adaptada a tu framework.</p>
+
+          <h2>Cómo usarlo</h2>
+          <ol>
+            <li>Copia el prompt de abajo</li>
+            <li>Pégalo en tu AI coding assistant</li>
+            <li>Agrega al final: "Mi proyecto usa [tu framework], mi sistema de auth es [tu auth]"</li>
+            <li>La IA generará el código completo de integración</li>
+          </ol>
+
+          <h2>El Prompt</h2>
+          <pre class="code-block">Necesito integrar Eteba Chat en mi sitio web. Eteba Chat es un asistente de ventas con IA
+que funciona como widget flotante. Responde en estilo WhatsApp (1-3 frases cortas), soporta
+español, francés e inglés, y aprende alias de productos automáticamente. Moneda: CFA.
+
+=== WIDGET ===
+Añade antes de &lt;/body&gt;:
+
+&lt;script&gt;
+window.__ETEBA_CHAT_USER__ = {
+  id: "USER_ID",         // ID del usuario en mi sistema
+  name: "Nombre",        // Nombre para personalizar
+  email: "email@x.com",  // Email (vinculación universal)
+  phone: "+240...",       // Teléfono (opcional)
+  logged: true,           // true si autenticado, false si visitante
+  loginUrl: "/login"      // URL de mi login (para no logueados)
+};
+&lt;/script&gt;
+&lt;script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=MI_TENANT_ID"&gt;&lt;/script&gt;
+
+Comportamiento:
+- logged: true → chat abierto con saludo personalizado
+- logged: false → panel de login con botón Google
+
+=== API DIRECTA ===
+POST https://eteba-chat.onrender.com/api/query
+Content-Type: application/json
+{"tenantId": "mi_tenant_id", "prompt": "texto del usuario", "user": {"id":"x","name":"x"}}
+
+Respuesta: {"type":"SQL","results":[...],"humanResponse":"texto de la IA"}
+
+=== PROXY PHP (si conecto mi MySQL) ===
+Crear archivo proxy con header X-Chat-Token para autenticar.
+Acciones disponibles: search_products, get_product_detail, list_stores,
+list_categories, products_by_category, calculate_shipping, insert_order, check_user_session.
+
+=== CSS PERSONALIZACIÓN ===
+.eteba-ai-widget-container {
+  --eteba-w-purple: #MI_COLOR;  /* Color principal */
+  bottom: 20px;                  /* Posición */
+  right: 20px;
+}
+
+=== NOTAS ===
+- HTTPS obligatorio
+- Inyectar __ETEBA_CHAT_USER__ ANTES del script del widget
+- El email vincula cuentas entre plataformas automáticamente
+- Max 60 req/min por tenant
+- Widget auto-detecta entorno (local vs producción)
+
+Implementa esto en mi proyecto. Mi framework es: [INDICAR AQUÍ]</pre>
+
+          <h2>Variante ultra-corta (solo widget sin auth)</h2>
+          <pre class="code-block">Añade el chat de Eteba a mi sitio. Pega antes de &lt;/body&gt;:
+&lt;script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=MI_TENANT_ID"&gt;&lt;/script&gt;
+Solo eso. No necesito autenticación.</pre>
+
+          <h2>Frameworks soportados</h2>
+          <ul>
+            <li><strong>PHP/Laravel/WordPress</strong> — Inyecta con PHP session</li>
+            <li><strong>React/Next.js</strong> — Componente o _document.js</li>
+            <li><strong>Vue/Nuxt</strong> — Plugin o layout</li>
+            <li><strong>Django/Flask</strong> — Template tag con request.user</li>
+            <li><strong>HTML estático</strong> — Script tag directo</li>
+            <li><strong>Shopify</strong> — theme.liquid</li>
+            <li><strong>Wix/Squarespace</strong> — Custom code block</li>
+          </ul>
         </article>
 
       </div>

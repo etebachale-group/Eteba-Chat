@@ -1,24 +1,27 @@
 # Eteba Chat
 
-**Plataforma B2B de automatización comercial con IA.**
+**Plataforma B2B de automatización comercial con IA para negocios africanos y globales.**
 
-Permite a negocios crear asistentes virtuales inteligentes que atienden clientes, buscan en catálogos en tiempo real y procesan pedidos — 24/7, sin intervención humana.
+Permite a cualquier empresa crear asistentes virtuales inteligentes que atienden clientes, buscan en catálogos multiidioma en tiempo real, procesan pedidos y aprenden de cada interacción — 24/7, sin intervención humana.
 
 **Live:** [https://eteba-chat.onrender.com](https://eteba-chat.onrender.com)
 
 ---
 
-## Características
+## Características Principales
 
-- **Asistente IA personalizable** — Manual operativo, tono e idioma configurables por negocio
-- **Búsqueda de catálogo en tiempo real** — Consulta inventario, precios y stock al instante
-- **Gestión automática de pedidos** — Captura datos del cliente y registra la orden
-- **API REST documentada** — Integra el asistente en cualquier sistema o app
-- **Multi-tenant** — Cada negocio tiene su espacio aislado con datos propios
-- **Google OAuth** — Login con un click, registro automático
-- **Dashboard** — Métricas, catálogo CRUD, configuración, API keys
-- **Documentación integrada** — Guías, API reference, ejemplos
+- **Asistente IA personalizable** — Manual operativo, tono e idioma por negocio
+- **Búsqueda inteligente multiidioma** — Entiende español, francés e inglés simultáneamente
+- **Sistema de alias auto-aprendizaje** — "tenis" = "zapatillas" = "sneakers" = "baskets"
+- **Memoria de conversación** — Recuerda contexto 15 min, respuestas cortas estilo WhatsApp
+- **Pedidos sin fricción** — Usa datos de sesión del usuario, solo confirma ciudad
+- **Chat Universal** — Los visitantes chatean con cualquier negocio desde la plataforma
+- **Vinculación por email** — Un email = una identidad en todo el ecosistema
 - **Widget embebible** — Una línea de código para instalar en cualquier web
+- **Dashboard admin** — Métricas, catálogo CRUD, configuración, API keys
+- **API REST** — Integra en cualquier sistema, app móvil o workflow
+- **Multi-tenant** — Cada negocio aislado con datos propios
+- **Google OAuth** — Login con un click
 
 ---
 
@@ -27,9 +30,9 @@ Permite a negocios crear asistentes virtuales inteligentes que atienden clientes
 | Capa | Tecnología |
 |------|-----------|
 | Backend | Node.js + Express + TypeScript |
-| Base de datos | PostgreSQL (InsForge) + MySQL (proxy PHP) |
-| IA / LLM | OpenRouter |
+| IA / LLM | Groq (Llama 3.1 8B Instant) + OpenRouter (fallback) |
 | Embeddings | Xenova/Transformers (all-MiniLM-L6-v2, 384d) |
+| Base de datos | PostgreSQL (InsForge) + MySQL (proxy PHP) |
 | Autenticación | Google OAuth 2.0 |
 | Frontend | HTML + CSS + JS vanilla (SPA) |
 | Hosting | Render.com |
@@ -40,183 +43,127 @@ Permite a negocios crear asistentes virtuales inteligentes que atienden clientes
 
 ```
 Eteba Chat/
-├── index.html              # Frontend SPA (Landing + Dashboard + Docs)
-├── server.ts               # Express server + API endpoints + OAuth
-├── router.ts               # Motor IA: clasificador heurístico + RAG híbrido
+├── index.html              # Frontend SPA (Landing + Explore + Dashboard + Docs)
+├── server.ts               # Express server + API + OAuth
+├── router.ts               # Motor IA: clasificador + RAG + aliases + memoria
 ├── ingest.ts               # Pipeline de ingesta de conocimiento
 ├── styles/
-│   ├── main.css            # Design system (variables, reset, componentes)
-│   ├── landing.css         # Hero, features, pricing, explore
-│   ├── dashboard.css       # Panel admin, modales, toasts, tablas
+│   ├── main.css            # Design system (purple/blue/cyan brand)
+│   ├── landing.css         # Hero, features, pricing, explore + chat
+│   ├── dashboard.css       # Panel admin, métricas, modales
 │   └── docs.css            # Documentación
 ├── scripts/
-│   ├── router.js           # Navegación SPA (hash-based)
-│   ├── auth.js             # Google OAuth (frontend)
-│   ├── explore.js          # Directorio de negocios
-│   ├── dashboard.js        # Panel admin + CRUD catálogo
-│   └── app.js              # Entry point + utilidades
+│   ├── router.js           # Navegación SPA
+│   ├── auth.js             # Google OAuth frontend
+│   ├── explore.js          # Directorio + chat universal
+│   ├── dashboard.js        # Panel admin + CRUD
+│   └── app.js              # Entry point
 ├── widget/
-│   ├── widget.js           # Widget embebible (auto-contenido)
+│   ├── widget.js           # Widget v3 (auth + chat + product cards)
 │   └── widget.css          # Estilos del widget
-├── sql/
-│   ├── 001-schema.sql      # Esquema base
-│   ├── 002-users-auth.sql  # Tabla users (Google OAuth)
-│   └── 003-dashboard-policies.sql  # RLS + pedidos_chat
+├── sql/                    # Migraciones numeradas
 ├── tests/                  # Tests de desarrollo
-├── docs/                   # Guías internas de configuración
-├── .env.example            # Plantilla de variables de entorno
+├── docs/                   # Guías y prompts
+├── .env.example            # Plantilla de variables
 ├── package.json
 ├── tsconfig.json
-└── Procfile                # Start command para Render
+└── Procfile
 ```
-
----
-
-## API Endpoints
-
-### Públicos
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| `POST` | `/api/query` | Enviar consulta al asistente IA |
-| `POST` | `/api/ingest` | Ingestar conocimiento (RAG semántico) |
-
-### Dashboard (requiere sesión)
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| `GET` | `/api/orders?tenantId=x` | Listar pedidos del negocio |
-| `GET` | `/api/catalog?tenantId=x` | Listar catálogo de productos |
-| `POST` | `/api/catalog` | Agregar producto al catálogo |
-| `POST` | `/api/config` | Guardar configuración del asistente |
-
-### Autenticación
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| `GET` | `/auth/google` | Iniciar login con Google |
-| `GET` | `/auth/google/callback` | Callback OAuth |
-| `GET` | `/auth/me?token=x` | Obtener usuario actual |
 
 ---
 
 ## Motor IA
 
-El router clasifica la intención del usuario **sin llamar al LLM** (latencia 0ms) usando heurísticas de texto:
+### Clasificación Heurística (0ms, sin LLM)
 
-| Intención | Acción | Fuente de datos |
-|-----------|--------|-----------------|
-| `CATALOGO_SQL` | Buscar productos | MySQL (proxy PHP) o Postgres |
-| `ENVIOS_SEMANTIC` | Búsqueda semántica RAG | Postgres + embeddings 384d |
-| `REGISTRO_PEDIDO` | Capturar datos + guardar orden | LLM extracción + DB |
-| `SALUDO_SOPORTE_GENERAL` | Respuesta conversacional | LLM + manual operativo |
+| Intención | Trigger | Acción |
+|-----------|---------|--------|
+| `CATALOGO_SQL` | productos, precios, stock | Proxy → Groq filter |
+| `TIENDAS` | tiendas, vendedores | Proxy `list_stores` |
+| `ENVIO_CALCULO` | cuánto cuesta enviar | Proxy `calculate_shipping` |
+| `ENVIOS_SEMANTIC` | agencias, tarifas | Proxy o RAG |
+| `REGISTRO_PEDIDO` | comprar, encargar, confirmar | Pre-fill con sesión |
+| `SALUDO_SOPORTE_GENERAL` | hola, preguntas | LLM + manual |
+
+### Sistema de Aliases (200+ entradas trilingües)
+
+El diccionario cubre español, francés e inglés:
+- "tenis" / "baskets" / "sneakers" → busca zapatillas
+- "cascos" / "écouteurs" / "headphones" → busca auriculares
+- "perruque" / "wig" / "peluca" → busca pelucas
+- Aprende relaciones nuevas con cada búsqueda exitosa
+
+### Memoria de Conversación
+
+- 8 últimos mensajes por sesión (tenant:userId)
+- TTL: 15 minutos de inactividad
+- Permite respuestas contextuales sin repetir preguntas
+
+### Aprendizaje de Errores
+
+- Detecta respuestas incorrectas automáticamente
+- Registra lecciones (max 10 por tenant)
+- Las inyecta como instrucciones negativas en prompts futuros
 
 ---
 
-## Widget Embebido
+## Flujo de Pedidos (sin fricción)
 
-```html
-<script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=TU_TENANT_ID"></script>
+```
+1. Usuario: "Quiero encargar Zapatillas Lacoste"
+2. Bot busca producto → encuentra precio y stock
+3. Bot: "Las Zapatillas Lacoste cuestan 16.000 CFA. ¿Envío a tu ciudad habitual?"
+4. Usuario: "Malabo"
+5. Bot guarda pedido con datos de sesión (nombre, teléfono de __ETEBA_CHAT_USER__)
+6. Bot: "¡Pedido #23 registrado! Te contactaremos por WhatsApp."
 ```
 
-- Auto-detecta entorno (local/producción)
-- Tarjetas de producto con imagen, precio y CTA
-- Responsive (móvil + desktop)
-- Personalizable con CSS custom properties
+No pide nombre ni teléfono — los toma de la sesión del usuario logueado.
 
 ---
 
 ## Variables de Entorno
 
-Copia `.env.example` a `.env.local` y rellena con tus valores reales:
-
 ```env
-# InsForge
+# InsForge (DB)
 INSFORGE_BASE_URL=https://xxx.us-east.insforge.app
 INSFORGE_API_KEY=ik_xxx
-
-# Postgres
 DATABASE_URL=postgresql://...
 
-# LLM
-OPENROUTER_API_KEY=sk-or-v1-xxx
+# IA
+GROQ_API_KEY=gsk_xxx
+OPENROUTER_API_KEY=sk-or-v1-xxx   # fallback
 
-# Proxy MySQL (producción)
+# Proxy MySQL
 ROTTERI_PROXY_URL=https://tu-sitio.com/api/chat-proxy.php
 ROTTERI_PROXY_TOKEN=tu_token_secreto
 
-# Google OAuth
+# OAuth
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-xxx
 ```
 
-> **Nunca** subas `.env.local` al repositorio. Está excluido en `.gitignore`.
-
 ---
 
-## Desarrollo Local
+## Deploy
 
-```bash
-npm install
-npm run build
-npm start
-```
-
-Abre `http://localhost:3000`
-
----
-
-## Deploy (Render)
-
-Deploy automático desde GitHub en cada push a `main`:
-
+Auto-deploy desde GitHub en cada push a `main`:
 - **Build:** `npm install && npm run build`
 - **Start:** `node dist/server.js`
 - **URL:** https://eteba-chat.onrender.com
-
-Variables de entorno se configuran en el dashboard de Render.
-
----
-
-## Bases de Datos
-
-### PostgreSQL (InsForge)
-- `companies` — Tenants (negocios registrados)
-- `users` — Usuarios autenticados con Google
-- `products` — Catálogo de productos/servicios
-- `knowledge_base` — Chunks con embeddings (RAG)
-- `pedidos_chat` — Pedidos de tenants sin proxy PHP
-
-### MySQL (via proxy PHP)
-- `productos` — Catálogo legacy
-- `pedidos_chat` — Pedidos desde widget
-
----
-
-## Integraciones
-
-| Integración | Estado |
-|-------------|--------|
-| Widget Web embebido | Activo |
-| Google OAuth | Activo |
-| Proxy PHP (MySQL) | Activo |
-| WhatsApp Business | Próximamente |
-| Telegram Bot | Próximamente |
-| Webhooks | Próximamente |
 
 ---
 
 ## Design System
 
-Paleta de marca basada en el logo oficial:
-
+Paleta basada en el logo oficial:
 - Purple Light: `#9D4EDD`
 - Purple Main: `#7209B7`
 - Blue Main: `#4361EE`
 - Cyan: `#00B4D8`
 - Background: `#141B2D`
 
-UI: Glassmorphism oscuro elegante con backdrop-filter, bordes translúcidos y gradientes sutiles de marca.
+UI: Glassmorphism elegante con backdrop-filter y gradientes de marca.
 
 ---
 

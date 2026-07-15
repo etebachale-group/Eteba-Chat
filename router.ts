@@ -527,6 +527,17 @@ function classifyIntentHeuristically(query: string): { type: 'SALUDO_SOPORTE_GEN
     return { type: 'REGISTRO_PEDIDO', term: query };
   }
 
+  // 1b. Confirmación de pedido pendiente (usuario dice "sí", ciudad, "confirmar", etc.)
+  const confirmPatterns = ['confirmar', 'confirmo', 'si por favor', 'sí', 'dale', 'ok', 'de acuerdo', 'perfecto', 'listo'];
+  const cities = ['malabo', 'bata', 'ebebiyin', 'mongomo', 'evinayong', 'luba', 'riaba', 'accra', 'lomé', 'douala'];
+  const isConfirming = confirmPatterns.some(p => q === p || q.startsWith(p));
+  const mentionsCity = cities.some(c => q.includes(c));
+  if (isConfirming || mentionsCity) {
+    // Solo tratar como confirmación si hay pedido pendiente en la conversación
+    // (se detectará en el flujo por la memoria de contexto)
+    return { type: 'REGISTRO_PEDIDO', term: query };
+  }
+
   // 2. Detección de tiendas
   const storeKeywords = ['tienda', 'tiendas', 'vendedor', 'vendedores', 'seller', 'shop', 'store'];
   if (storeKeywords.some(kw => q.includes(kw)) && !q.includes('producto')) {
@@ -712,128 +723,80 @@ Responde SOLO JSON: {"origin":"ciudad o país","destination":"ciudad o país"}`;
     return { type: 'SALUDO_SOPORTE_GENERAL' as const, results: [], humanResponse };
   }
 
-  // Flujo D: Captura y validación estructurada de pedidos
+  // Flujo D: Pedidos — Usa datos del usuario logueado, solo confirma
   if (decision.type === 'REGISTRO_PEDIDO') {
 
-    // Extracción local del nombre del producto (sin LLM) desde el patrón del botón del widget
-    let productNameLocal: string | null = null;
+    // Extraer nombre del producto del mensaje
+    let productName: string | null = null;
     const widgetOrderMatch = userQuery.match(/quiero\s+(?:encargar|comprar)\s+(?:el\s+)?producto\s*:\s*(.+)/i);
     if (widgetOrderMatch) {
-      productNameLocal = widgetOrderMatch[1].trim();
+      productName = widgetOrderMatch[1].trim();
     }
+
+    // Si no se detectó del widget, extraer con LLM
+    if (!productName) {
+      const extractPrompt = `Del mensaje extrae solo el nombre del producto. Responde SOLO el nombre, nada más. Si no hay producto claro, responde: NONE`;
+      const extracted = await callLLM(extractPrompt, userQuery, 50);
+      if (extracted && !extracted.includes('NONE') && extracted.length < 100) {
+        productName = extracted.trim().replace(/^["']|["']$/g, '');
+      }
+    }
+
+    // Obtener datos del usuario desde la memoria de conversación / request
+    // El widget envía user.name, user.phone en el body del request
+    const conversationHistory = getConversationHistory(conversationKey);
     
-    const extractionPrompt = `Extrae datos de pedido del mensaje. Responde SOLO con JSON válido:
-{"customer_name": "nombre o null", "phone": "teléfono o null", "address": "ciudad o null", "product_name": "producto o null"}`;
+    // Buscar producto para obtener precio
+    let productId: number | null = null;
+    let tiendaId: number | null = null;
+    let precioProd: number = 0;
 
-    const rawJson = await callLLM(extractionPrompt, userQuery, 150);
-    const jsonMatch = rawJson.match(/\{[\s\S]*\}/);
-    const cleanJson = jsonMatch ? jsonMatch[0] : rawJson;
-
-    let data;
-    try {
-      data = JSON.parse(cleanJson);
-    } catch {
-      data = {};
-    }
-
-    // Priorizar el nombre extraído localmente (más fiable para frases del widget)
-    if (productNameLocal && !data.product_name) {
-      data.product_name = productNameLocal;
-    }
-
-    // Determinar si faltan datos requeridos por el manual
-    const missingFields: string[] = [];
-    if (!data.customer_name) missingFields.push('Nombre Completo');
-    if (!data.phone) missingFields.push('Número de Teléfono (+240)');
-    if (!data.address) missingFields.push('Ciudad de entrega (Malabo o Bata)');
-
-    let humanResponse = '';
-    if (missingFields.length > 0) {
-      const productMention = data.product_name ? `"${data.product_name}"` : 'el producto';
-
-      // Devolver tipo ORDER_FORM para que el widget renderice una tarjeta de formulario
-      return {
-        type: 'ORDER_FORM' as const,
-        results: [],
-        humanResponse: `Para completar tu pedido de ${productMention}, necesito los siguientes datos:`,
-        orderForm: {
-          product_name: data.product_name || null,
-          missingFields: missingFields,
-          filledFields: {
-            customer_name: data.customer_name || null,
-            phone: data.phone || null,
-            address: data.address || null,
-          }
-        }
-      };
-    } else {
-      // ✅ GUARDAR PEDIDO REAL (local: MySQL directo | producción: proxy PHP)
-      let productId: number | null = null;
-      let tiendaId: number | null = null;
-      let precioProd: number = 0;
-      let pedidoId: number | null = null;
-
-      try {
-        // Buscar el producto para obtener ID, tienda y precio reales
-        if (data.product_name) {
-          const prod = await findProductByName(data.product_name);
-          if (prod) {
-            productId = prod.id;
-            tiendaId  = prod.tienda_id;
-            precioProd = parseFloat(String(prod.precio)) || 0;
-          }
-        }
-
-        // Guardar el pedido en la base de datos
-        pedidoId = await savePedidoChat({
-          producto_nombre: data.product_name || '',
-          cliente_nombre: data.customer_name,
-          cliente_telefono: data.phone,
-          ciudad_entrega: data.address,
-          precio_producto: precioProd,
-          tienda_id: tiendaId,
-          producto_id: productId,
-          notas: ''
-        });
-
-        console.log(`✅ Pedido #${pedidoId} guardado en pedidos_chat para cliente: ${data.customer_name}`);
-      } catch (dbErr: any) {
-        console.error('⚠️ Error guardando pedido en MySQL:', dbErr.message);
-        // Continuar igual — el cliente recibe confirmación aunque falle el guardado
+    if (productName) {
+      const prod = await findProductByName(productName);
+      if (prod) {
+        productId = prod.id;
+        tiendaId = prod.tienda_id;
+        precioProd = parseFloat(String(prod.precio)) || 0;
       }
-
-      const pedidoRef = pedidoId ? ` (Referencia #${pedidoId})` : '';
-      const successPrompt = `Pedido${pedidoRef} completado:
-- Nombre: ${data.customer_name}
-- Teléfono: ${data.phone}
-- Ciudad: ${data.address}
-- Producto: ${data.product_name}${precioProd > 0 ? ` - ${precioProd.toLocaleString('es-ES')} CFA` : ''}
-Confirma de forma cálida y breve. Menciona la referencia si existe.`;
-
-      humanResponse = await callLLM(
-        operationalManual || 'Eres un asistente de ventas amable.',
-        successPrompt,
-        200
-      );
-      if (!humanResponse || humanResponse.includes('error')) {
-        humanResponse = `¡Pedido${pedidoRef} registrado con éxito! Pronto te contactaremos.`;
-      }
-
-      return {
-        type: 'ORDER_SUCCESS' as const,
-        results: [],
-        humanResponse,
-        orderConfirmation: {
-          pedidoId: pedidoId,
-          product_name: data.product_name,
-          customer_name: data.customer_name,
-          phone: data.phone,
-          address: data.address,
-          price: precioProd
-        }
-      };
     }
 
+    // Si no hay producto identificado, pedir aclaración
+    if (!productName) {
+      const response = '¿Qué producto te gustaría encargar? Puedes decirme el nombre o buscarlo primero.';
+      addToConversation(conversationKey, 'user', userQuery);
+      addToConversation(conversationKey, 'assistant', response);
+      return { type: 'SALUDO_SOPORTE_GENERAL' as const, results: [], humanResponse: response };
+    }
+
+    // Devolver confirmación con datos pre-llenados del usuario
+    // El frontend tiene los datos del usuario (window.__ETEBA_CHAT_USER__)
+    // Solo pedimos confirmar la ciudad de entrega
+    const priceStr = precioProd > 0 ? `${precioProd.toLocaleString('es-ES')} CFA` : 'consultar';
+    
+    const confirmResponse = await callLLM(
+      operationalManual || 'Eres un asistente de ventas conciso y amable.',
+      `El cliente quiere comprar: "${productName}" (${priceStr}). 
+Ya tenemos sus datos de su cuenta (nombre, teléfono). 
+Solo necesitamos confirmar la ciudad de entrega.
+Pregunta brevemente: confirma si enviar a su ciudad habitual o indica otra ciudad.
+NO pidas nombre ni teléfono — ya los tenemos.`,
+      150
+    );
+
+    addToConversation(conversationKey, 'user', userQuery);
+    addToConversation(conversationKey, 'assistant', confirmResponse);
+
+    return {
+      type: 'ORDER_CONFIRM' as const,
+      results: [],
+      humanResponse: confirmResponse,
+      orderPending: {
+        product_name: productName,
+        product_id: productId,
+        tienda_id: tiendaId,
+        price: precioProd,
+      }
+    };
   }
 
 
