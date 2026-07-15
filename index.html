@@ -599,28 +599,47 @@ Content-Type: application/json
           <h2>Paso 2: Configurar tu asistente</h2>
           <p>En el Dashboard → Configuración, define:</p>
           <ul>
-            <li><strong>Nombre</strong> — Cómo se presenta tu asistente (ej: "Asistente de MiTienda")</li>
-            <li><strong>Manual Operativo</strong> — Instrucciones de comportamiento. Ejemplo:</li>
+            <li><strong>Nombre</strong> — Cómo se presenta tu asistente</li>
+            <li><strong>Manual Operativo</strong> — Instrucciones que guían sus respuestas</li>
+            <li><strong>Idiomas</strong> — Español, francés, inglés (detecta automáticamente)</li>
+            <li><strong>Tipo de negocio</strong> — Tienda, servicios, restaurante, etc.</li>
           </ul>
-          <pre class="code-block">Eres el asistente virtual de MiTienda. Hablas en español de forma amable.
-Cuando te pregunten por productos, busca en el catálogo.
-Si un cliente quiere comprar, pídele: nombre, teléfono y ciudad de entrega.
-No inventes productos que no están en el inventario.</pre>
 
           <h2>Paso 3: Instalar el widget</h2>
           <p>Copia este código y pégalo antes del cierre <code>&lt;/body&gt;</code> en tu sitio web:</p>
-          <pre class="code-block">&lt;script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=TU_TENANT_ID"&gt;&lt;/script&gt;</pre>
+          <pre class="code-block">&lt;!-- Datos del usuario (adaptar a tu sistema de auth) --&gt;
+&lt;script&gt;
+window.__ETEBA_CHAT_USER__ = {
+  id: "id_del_usuario",
+  name: "Nombre",
+  email: "email@ejemplo.com",
+  phone: "+240...",
+  logged: true,
+  loginUrl: "/login"
+};
+&lt;/script&gt;
+
+&lt;!-- Widget Eteba Chat --&gt;
+&lt;script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=TU_TENANT_ID"&gt;&lt;/script&gt;</pre>
           <p>Reemplaza <code>TU_TENANT_ID</code> con el ID que aparece en Dashboard → API Keys.</p>
 
           <h2>Paso 4: Probar</h2>
-          <p>Visita tu sitio web. Verás un botón verde en la esquina inferior derecha. 
-          Haz click y prueba una consulta como "¿Qué productos tienen?"</p>
+          <p>Visita tu sitio web. Verás un botón flotante en la esquina inferior derecha. 
+          Si el usuario está logueado se abre el chat. Si no, ve un panel de login.</p>
 
-          <h2>¿Qué sigue?</h2>
+          <h2>Para Vibecoders</h2>
+          <p>Si usas una IA para codear (Cursor, Claude, ChatGPT, etc.), tenemos un prompt 
+          listo que puedes pegar y la IA hará toda la integración por ti. 
+          Descárgalo desde el repo: <code>docs/prompt-vibecoder.md</code></p>
+
+          <h2>Características automáticas</h2>
           <ul>
-            <li>Agrega productos a tu catálogo desde el Dashboard</li>
-            <li>Configura un proxy PHP si usas MySQL externo</li>
-            <li>Ingesta documentos de conocimiento (políticas, FAQ, tarifas) con la API de ingesta</li>
+            <li>Respuestas cortas estilo WhatsApp (1-3 frases)</li>
+            <li>Detecta idioma automáticamente (ES/FR/EN)</li>
+            <li>Aprende alias de productos ("tenis" → "zapatillas")</li>
+            <li>Memoria de conversación (recuerda contexto 15 min)</li>
+            <li>Tarjetas de producto con imagen, precio y botón encargar</li>
+            <li>Moneda: CFA (Franco CFA) por defecto</li>
           </ul>
         </article>
 
