@@ -16,10 +16,19 @@ const Dashboard = (() => {
     const user = Auth.getUser();
     if (!user) return;
 
-    loadMetrics(user.id);
-    loadRecentOrders(user.id);
-    loadCatalog(user.id);
+    // Usar el tenantId vinculado (para admins de negocios usa el tenant del negocio)
+    const tenantId = user.tenantId || user.id;
+
+    loadMetrics(tenantId);
+    loadRecentOrders(tenantId);
+    loadCatalog(tenantId);
     displayTenantInfo();
+
+    // Mostrar badge de rol si es admin
+    const headerEl = document.querySelector('#tab-overview .dash-tab__header h2');
+    if (headerEl && user.role === 'admin') {
+      headerEl.textContent = `Panel de Administración`;
+    }
   }
 
   /** Navegación entre tabs del dashboard */
@@ -145,6 +154,8 @@ const Dashboard = (() => {
         return;
       }
 
+      const tenantId = user.tenantId || user.id;
+
       const btn = document.getElementById('btn-save-config');
       btn.textContent = 'Guardando...';
       btn.disabled = true;
@@ -156,7 +167,7 @@ const Dashboard = (() => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${Auth.getAccessToken()}`
           },
-          body: JSON.stringify({ tenantId: user.id, name, manual, type })
+          body: JSON.stringify({ tenantId: tenantId, name, manual, type })
         });
 
         if (resp.ok) {
@@ -249,7 +260,7 @@ const Dashboard = (() => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${Auth.getAccessToken()}`
           },
-          body: JSON.stringify({ tenantId: user.id, name, description, price, stock, image_url })
+          body: JSON.stringify({ tenantId: user.tenantId || user.id, name, description, price, stock, image_url })
         });
 
         if (resp.ok) {
@@ -270,14 +281,16 @@ const Dashboard = (() => {
     const user = Auth.getUser();
     if (!user) return;
 
+    const tenantId = user.tenantId || user.id;
+
     const tenantDisplay = document.getElementById('display-tenant-id');
     if (tenantDisplay) {
-      tenantDisplay.textContent = user.id || '—';
+      tenantDisplay.textContent = tenantId;
     }
 
     const widgetCode = document.getElementById('widget-code');
-    if (widgetCode && user.id) {
-      widgetCode.textContent = `<script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=${user.id}"><\/script>`;
+    if (widgetCode) {
+      widgetCode.textContent = `<script src="https://eteba-chat.onrender.com/widget/widget.js?tenant_id=${tenantId}"><\/script>`;
     }
   }
 

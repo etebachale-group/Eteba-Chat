@@ -231,6 +231,33 @@
         <div class="explore__grid" id="explore-grid">
           <!-- Se llena dinámicamente -->
         </div>
+
+        <!-- Chat Universal Integrado -->
+        <div class="explore__chat-panel" id="explore-chat-panel" style="display:none;">
+          <div class="explore-chat">
+            <div class="explore-chat__header">
+              <button class="explore-chat__back" id="explore-chat-back">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m7-7l-7 7 7 7"/></svg>
+              </button>
+              <div class="explore-chat__biz-info">
+                <span class="explore-chat__biz-logo" id="chat-biz-logo">R</span>
+                <div>
+                  <h4 id="chat-biz-name">Negocio</h4>
+                  <p id="chat-biz-status">En línea</p>
+                </div>
+              </div>
+            </div>
+            <div class="explore-chat__body" id="explore-chat-body">
+              <div class="eteba-ai-msg eteba-ai-msg-bot">¡Hola! ¿En qué puedo ayudarte?</div>
+            </div>
+            <div class="explore-chat__footer">
+              <input type="text" class="explore-chat__input" id="explore-chat-input" placeholder="Buscar productos, preguntar precios..." autocomplete="off">
+              <button class="explore-chat__send" id="explore-chat-send">
+                <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </main>

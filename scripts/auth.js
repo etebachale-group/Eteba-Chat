@@ -80,6 +80,8 @@ const Auth = (() => {
         email: payload.email,
         name: payload.name,
         avatar_url: payload.avatar_url || null,
+        role: payload.role || 'user',
+        tenantId: payload.tenantId || payload.id,
       };
       localStorage.setItem('eteba_user', JSON.stringify(currentUser));
       updateUI();

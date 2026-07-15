@@ -35,7 +35,7 @@ app.use(express.static(path.join(__dirname, '..')));
  * Body: { tenantId: string, prompt: string }
  */
 app.post('/api/query', async (req: express.Request, res: express.Response) => {
-  const { tenantId, prompt } = req.body;
+  const { tenantId, prompt, user } = req.body;
 
   if (!tenantId || !prompt) {
     res.status(400).json({ error: 'Faltan parámetros obligatorios: tenantId o prompt.' });
@@ -242,17 +242,40 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
     });
     const profile = await profileResp.json() as { id: string; email: string; name: string; picture: string };
 
-    // Guardar/actualizar usuario en InsForge (tabla users)
-    const { data: existingUser } = await insforge.database
+    // ─── Vinculación por EMAIL (identificador universal) ───────────────────
+    // Primero buscar por email (vincula usuarios de Rotteri y Eteba Chat)
+    let existingUser: any = null;
+    const { data: userByEmail } = await insforge.database
       .from('users')
-      .select('id')
-      .eq('google_id', profile.id)
+      .select('id, email, google_id')
+      .eq('email', profile.email)
       .maybeSingle();
 
+    if (userByEmail) {
+      existingUser = userByEmail;
+      // Si no tenía google_id (fue creado desde otro sistema), vincularlo
+      if (!userByEmail.google_id) {
+        await insforge.database
+          .from('users')
+          .update({ google_id: profile.id, avatar_url: profile.picture, updated_at: new Date().toISOString() })
+          .eq('id', userByEmail.id);
+      }
+    } else {
+      // Buscar por google_id como fallback
+      const { data: userByGoogle } = await insforge.database
+        .from('users')
+        .select('id, email, google_id')
+        .eq('google_id', profile.id)
+        .maybeSingle();
+      existingUser = userByGoogle;
+    }
+
     let userId: string;
+    let userRole = 'user';
+    let linkedTenantId: string | null = null;
+
     if (existingUser) {
       userId = existingUser.id;
-      // Actualizar info
       await insforge.database
         .from('users')
         .update({ name: profile.name, email: profile.email, avatar_url: profile.picture, updated_at: new Date().toISOString() })
@@ -282,12 +305,25 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
         .insert([{ id: userId, name: profile.name, owner_id: userId }]);
     }
 
-    // Crear un token simple (en producción usar JWT)
+    // ─── Verificar si el email es owner de algún negocio/tenant ────────────
+    // Mapeo de emails de administradores a sus tenant IDs
+    const businessOwners: Record<string, { tenantId: string; role: string }> = {
+      'rotterinzakus@gmail.com': { tenantId: 'e22e9ee0-d29a-4172-88de-fb9ad14c9c1b', role: 'admin' },
+    };
+
+    if (businessOwners[profile.email]) {
+      userRole = businessOwners[profile.email].role;
+      linkedTenantId = businessOwners[profile.email].tenantId;
+    }
+
+    // Crear token con info extendida
     const userPayload = {
       id: userId,
       email: profile.email,
       name: profile.name,
       avatar_url: profile.picture,
+      role: userRole,
+      tenantId: linkedTenantId || userId,
     };
 
     const token = Buffer.from(JSON.stringify(userPayload)).toString('base64url');
@@ -316,6 +352,35 @@ app.get('/auth/me', (req: express.Request, res: express.Response) => {
     res.json(payload);
   } catch {
     res.status(401).json({ error: 'Token inválido' });
+  }
+});
+
+/**
+ * Vincular usuario por email — verifica si un email ya existe en la plataforma
+ * POST /auth/link
+ * Body: { email: string }
+ */
+app.post('/auth/link', async (req: express.Request, res: express.Response) => {
+  const { email } = req.body;
+  if (!email) {
+    res.status(400).json({ error: 'Falta email' });
+    return;
+  }
+
+  try {
+    const { data: user } = await insforge.database
+      .from('users')
+      .select('id, email, name, avatar_url')
+      .eq('email', email.toLowerCase().trim())
+      .maybeSingle();
+
+    if (user) {
+      res.json({ linked: true, user: { id: user.id, name: user.name, email: user.email } });
+    } else {
+      res.json({ linked: false });
+    }
+  } catch (err: any) {
+    res.json({ linked: false });
   }
 });
 
