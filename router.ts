@@ -273,6 +273,8 @@ function classifyIntentHeuristically(query: string): { type: 'SALUDO_SOPORTE_GEN
  * Enrutador híbrido de alto rendimiento.
  */
 export async function hybridQuery(tenantId: string, userQuery: string) {
+  console.log(`📨 Query recibida | tenant: ${tenantId} | prompt: "${userQuery.substring(0, 50)}"`);
+  
   // 1. Obtener manual operativo dinámico de la caché local
   const operationalManual = await getCachedOperationalManual(tenantId);
 
