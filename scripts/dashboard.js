@@ -16,19 +16,45 @@ const Dashboard = (() => {
     const user = Auth.getUser();
     if (!user) return;
 
-    // Usar el tenantId vinculado (para admins de negocios usa el tenant del negocio)
     const tenantId = user.tenantId || user.id;
+
+    // Personalizar saludo
+    const welcomeEl = document.getElementById('dash-welcome');
+    const subtitleEl = document.getElementById('dash-subtitle');
+    if (welcomeEl) {
+      const hour = new Date().getHours();
+      const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
+      const name = user.name ? user.name.split(' ')[0] : '';
+      welcomeEl.textContent = `${greeting}${name ? ', ' + name : ''}`;
+    }
+    if (subtitleEl && user.role === 'admin') {
+      subtitleEl.textContent = 'Panel de administración de tu negocio';
+    }
 
     loadMetrics(tenantId);
     loadRecentOrders(tenantId);
     loadCatalog(tenantId);
     displayTenantInfo();
+    initQuickActions();
+  }
 
-    // Mostrar badge de rol si es admin
-    const headerEl = document.querySelector('#tab-overview .dash-tab__header h2');
-    if (headerEl && user.role === 'admin') {
-      headerEl.textContent = `Panel de Administración`;
-    }
+  /** Quick action buttons */
+  function initQuickActions() {
+    document.querySelectorAll('.dash-quick-btn[data-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        // Activate sidebar tab
+        document.querySelectorAll('.sidebar__item').forEach(i => i.classList.remove('sidebar__item--active'));
+        document.querySelector(`.sidebar__item[data-tab="${tab}"]`)?.classList.add('sidebar__item--active');
+        document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(`tab-${tab}`)?.classList.add('active');
+      });
+    });
+
+    // Test chat button → navigate to explore
+    document.getElementById('btn-test-chat')?.addEventListener('click', () => {
+      AppRouter.navigate('explore');
+    });
   }
 
   /** Navegación entre tabs del dashboard */
@@ -51,8 +77,31 @@ const Dashboard = (() => {
 
   /** Cargar métricas del overview */
   async function loadMetrics(tenantId) {
-    // TODO: Endpoint de métricas — por ahora mostrar datos de placeholder
-    // Cuando tengamos el endpoint, hacer fetch y actualizar los valores
+    try {
+      // Contar pedidos
+      const ordersResp = await fetch(`${API_BASE}/api/orders?tenantId=${tenantId}`);
+      if (ordersResp.ok) {
+        const ordersData = await ordersResp.json();
+        const orderCount = ordersData.orders?.length || 0;
+        const valOrders = document.getElementById('val-orders');
+        if (valOrders) valOrders.textContent = orderCount.toString();
+      }
+
+      // Contar productos
+      const catalogResp = await fetch(`${API_BASE}/api/catalog?tenantId=${tenantId}`);
+      if (catalogResp.ok) {
+        const catalogData = await catalogResp.json();
+        const productCount = catalogData.products?.length || 0;
+        const valProducts = document.getElementById('val-products');
+        if (valProducts) valProducts.textContent = productCount.toString();
+      }
+
+      // Queries (placeholder por ahora)
+      const valQueries = document.getElementById('val-queries');
+      if (valQueries) valQueries.textContent = '—';
+    } catch (err) {
+      // Silently fail — metrics are non-critical
+    }
   }
 
   /** Cargar pedidos recientes */

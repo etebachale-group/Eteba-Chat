@@ -62,10 +62,242 @@ if (!ROTTERI_PROXY_URL) {
   console.log(`🌐 Modo PRODUCCIÓN: usando proxy PHP en ${ROTTERI_PROXY_URL}`);
 }
 
+// ─── SISTEMA DE ALIAS Y RELACIONES DE PRODUCTOS ────────────────────────────────
+// Mapea nombres coloquiales, traducciones, sinónimos y descripciones alternativas
+// a términos de búsqueda que el catálogo realmente tiene.
+// Se auto-enriquece con cada interacción exitosa.
 
-// 3. Caché de manual operativo en memoria para reducir latencia de peticiones de red a InsForge (10 minutos)
+const productAliases: Record<string, string[]> = {
+  // ═══ CALZADO (ES/FR/EN) ═══
+  'tenis': ['zapatilla', 'sneaker', 'chaussure sport', 'basket'],
+  'deportivas': ['zapatilla', 'sneaker', 'basket', 'sport'],
+  'zapato deportivo': ['zapatilla', 'sneaker', 'basket'],
+  'bambas': ['zapatilla', 'sneaker'],
+  'championes': ['zapatilla', 'sneaker'],
+  'chaussure': ['zapato', 'zapatilla', 'shoe', 'calzado'],
+  'chaussures': ['zapato', 'zapatilla', 'shoe', 'calzado'],
+  'basket': ['zapatilla', 'sneaker', 'deportiva'],
+  'baskets': ['zapatilla', 'sneaker', 'deportiva'],
+  'shoe': ['zapato', 'zapatilla', 'chaussure'],
+  'shoes': ['zapato', 'zapatilla', 'chaussure'],
+  'sneaker': ['zapatilla', 'basket', 'tenis'],
+  'sneakers': ['zapatilla', 'basket', 'tenis'],
+  'sandal': ['sandalia', 'sandale', 'chancla'],
+  'sandale': ['sandalia', 'sandal', 'chancla'],
+  'sandalia': ['sandal', 'sandale', 'chancla'],
+  'chancla': ['sandalia', 'sandale', 'flip flop'],
+  'tacones': ['zapato', 'talon', 'heel', 'escarpin'],
+  'talon': ['tacón', 'heel', 'escarpin'],
+  'heel': ['tacón', 'talon', 'escarpin'],
+  'botte': ['bota', 'boot'],
+  'boot': ['bota', 'botte'],
+  'bota': ['boot', 'botte'],
+  
+  // ═══ PELUCAS / CABELLO (ES/FR/EN) ═══
+  'pelo': ['peluca', 'wig', 'perruque', 'cheveux', 'cabello'],
+  'cabello': ['peluca', 'wig', 'perruque', 'cheveux', 'hair'],
+  'hair': ['peluca', 'wig', 'perruque', 'cheveux', 'cabello'],
+  'cheveux': ['peluca', 'wig', 'perruque', 'hair', 'cabello'],
+  'perruque': ['peluca', 'wig', 'hair'],
+  'peluca': ['wig', 'perruque'],
+  'wig': ['peluca', 'perruque'],
+  'extensiones': ['extension', 'peluca', 'wig', 'rajout'],
+  'extension': ['extensiones', 'peluca', 'rajout'],
+  'rajout': ['extensiones', 'extension', 'peluca'],
+  'lace': ['peluca', 'lace frontal', 'frontal', 'perruque'],
+  'frontal': ['peluca', 'lace', 'lace frontal'],
+  'postizo': ['peluca', 'wig', 'perruque'],
+  'trenzas': ['peluca', 'tresse', 'braid'],
+  'tresse': ['trenza', 'braid', 'peluca'],
+  'braid': ['trenza', 'tresse', 'peluca'],
+  'naturelle': ['natural', 'peluca natural', 'wig'],
+  
+  // ═══ ELECTRÓNICA / AUDIO (ES/FR/EN) ═══
+  'cascos': ['auricular', 'headphone', 'écouteur', 'casque'],
+  'audífonos': ['auricular', 'headphone', 'écouteur', 'earphone'],
+  'auricular': ['headphone', 'écouteur', 'casque', 'earphone'],
+  'auriculares': ['headphone', 'écouteur', 'casque', 'earphone'],
+  'écouteur': ['auricular', 'headphone', 'earphone'],
+  'écouteurs': ['auricular', 'headphone', 'earphone'],
+  'casque': ['auricular', 'headphone', 'cascos'],
+  'headphone': ['auricular', 'casque', 'écouteur'],
+  'headphones': ['auricular', 'casque', 'écouteur'],
+  'earbuds': ['auricular', 'tws', 'écouteur', 'bluetooth'],
+  'inalámbricos': ['wireless', 'sans fil', 'bluetooth', 'tws'],
+  'wireless': ['inalámbrico', 'sans fil', 'bluetooth'],
+  'sans fil': ['inalámbrico', 'wireless', 'bluetooth'],
+  'bluetooth': ['inalámbrico', 'wireless', 'sans fil', 'tws'],
+  'bocina': ['altavoz', 'speaker', 'enceinte', 'parlante'],
+  'enceinte': ['altavoz', 'speaker', 'bocina', 'parlante'],
+  'speaker': ['altavoz', 'enceinte', 'bocina'],
+  'parlante': ['altavoz', 'speaker', 'enceinte'],
+  'micro': ['micrófono', 'mic', 'microphone'],
+  'micrófono': ['mic', 'microphone', 'micro'],
+  'microphone': ['micrófono', 'mic', 'micro'],
+  
+  // ═══ ROPA (ES/FR/EN) ═══
+  'camiseta': ['camisa', 'shirt', 't-shirt', 'polo', 'maillot', 'tee'],
+  'playera': ['camisa', 'camiseta', 't-shirt', 'maillot'],
+  'chemise': ['camisa', 'shirt', 'blusa'],
+  'shirt': ['camisa', 'chemise', 'camiseta'],
+  'maillot': ['camiseta', 'jersey', 'shirt'],
+  'polo': ['camisa', 'polo', 'shirt'],
+  'pantalón': ['pantalon', 'pants', 'trousers'],
+  'pantalon': ['pantalón', 'pants', 'trousers'],
+  'pants': ['pantalón', 'pantalon', 'trousers'],
+  'jean': ['pantalón', 'vaquero', 'denim', 'jeans'],
+  'jeans': ['pantalón', 'vaquero', 'denim', 'jean'],
+  'short': ['pantalón corto', 'bermuda', 'short'],
+  'bermuda': ['short', 'pantalón corto'],
+  'sudadera': ['hoodie', 'suéter', 'buzo', 'sweat'],
+  'hoodie': ['sudadera', 'capucha', 'buzo', 'sweat'],
+  'sweat': ['sudadera', 'hoodie', 'buzo'],
+  'veste': ['chaqueta', 'jacket', 'cazadora'],
+  'jacket': ['chaqueta', 'veste', 'chamarra'],
+  'chaqueta': ['jacket', 'veste', 'chamarra'],
+  'robe': ['vestido', 'dress'],
+  'dress': ['vestido', 'robe'],
+  'vestido': ['dress', 'robe'],
+  'jupe': ['falda', 'skirt'],
+  'skirt': ['falda', 'jupe'],
+  'falda': ['skirt', 'jupe'],
+  
+  // ═══ ACCESORIOS (ES/FR/EN) ═══
+  'montre': ['reloj', 'watch'],
+  'watch': ['reloj', 'montre'],
+  'reloj': ['watch', 'montre'],
+  'smartwatch': ['reloj inteligente', 'montre connectée'],
+  'lunettes': ['gafas', 'lentes', 'glasses'],
+  'glasses': ['gafas', 'lentes', 'lunettes'],
+  'gafas': ['glasses', 'lunettes', 'lentes'],
+  'lentes': ['gafas', 'glasses', 'lunettes'],
+  'sac': ['bolso', 'bag', 'cartera', 'mochila'],
+  'bag': ['bolso', 'sac', 'cartera'],
+  'bolso': ['bag', 'sac', 'cartera'],
+  'backpack': ['mochila', 'sac à dos'],
+  'mochila': ['backpack', 'sac à dos'],
+  'bijou': ['joya', 'jewelry', 'bijoux'],
+  'jewelry': ['joya', 'bijou', 'bijoux'],
+  'joya': ['jewelry', 'bijou'],
+  'collier': ['collar', 'necklace'],
+  'necklace': ['collar', 'collier'],
+  'collar': ['necklace', 'collier'],
+  'bracelet': ['pulsera', 'bracelet'],
+  'pulsera': ['bracelet'],
+  'bague': ['anillo', 'ring'],
+  'ring': ['anillo', 'bague'],
+  'anillo': ['ring', 'bague'],
+  'ceinture': ['cinturón', 'belt'],
+  'belt': ['cinturón', 'ceinture'],
+  'cinturón': ['belt', 'ceinture'],
+  'funda': ['case', 'carcasa', 'coque', 'protector'],
+  'coque': ['funda', 'case', 'carcasa'],
+  'case': ['funda', 'coque', 'carcasa'],
+  
+  // ═══ BELLEZA / COSMÉTICOS (ES/FR/EN) ═══
+  'crema': ['cream', 'crème', 'moisturizer'],
+  'crème': ['crema', 'cream', 'moisturizer'],
+  'cream': ['crema', 'crème'],
+  'parfum': ['perfume', 'fragrance', 'cologne'],
+  'perfume': ['parfum', 'fragrance', 'cologne'],
+  'fragrance': ['perfume', 'parfum'],
+  'maquillaje': ['makeup', 'maquillage', 'cosmético'],
+  'maquillage': ['maquillaje', 'makeup', 'cosmético'],
+  'makeup': ['maquillaje', 'maquillage'],
+  'rouge à lèvres': ['labial', 'lipstick', 'pintalabios'],
+  'lipstick': ['labial', 'rouge à lèvres'],
+  'labial': ['lipstick', 'rouge à lèvres', 'gloss'],
+  
+  // ═══ TÉRMINOS GENÉRICOS / INTENCIONES ═══
+  'algo bonito': ['moda', 'accesorio', 'ropa', 'tendencia'],
+  'regalo': ['accesorio', 'perfume', 'joya', 'reloj', 'cadeau'],
+  'cadeau': ['regalo', 'gift', 'accesorio'],
+  'gift': ['regalo', 'cadeau'],
+  'para mujer': ['mujer', 'dama', 'femenino', 'femme', 'women'],
+  'femme': ['mujer', 'dama', 'women'],
+  'women': ['mujer', 'femme', 'dama'],
+  'para hombre': ['hombre', 'caballero', 'masculino', 'homme', 'men'],
+  'homme': ['hombre', 'men', 'caballero'],
+  'men': ['hombre', 'homme', 'caballero'],
+  'barato': ['económico', 'oferta', 'pas cher', 'cheap'],
+  'pas cher': ['barato', 'económico', 'cheap'],
+  'cheap': ['barato', 'pas cher', 'económico'],
+  'nouveau': ['nuevo', 'new', 'reciente'],
+  'new': ['nuevo', 'nouveau', 'reciente'],
+  'nuevo': ['new', 'nouveau', 'reciente'],
+};
+
+// Caché de alias aprendidos dinámicamente (se enriquece con cada búsqueda exitosa)
+const learnedAliases: Map<string, Set<string>> = new Map();
+
+/**
+ * Expande un término de búsqueda con todos los alias conocidos.
+ * "tenis" → ["tenis", "zapatilla", "sneaker", "zapato deportivo"]
+ */
+function expandSearchTerms(term: string): string[] {
+  const lower = term.toLowerCase().trim();
+  const expanded = new Set<string>([lower]);
+
+  // Buscar en alias estáticos
+  for (const [alias, targets] of Object.entries(productAliases)) {
+    if (lower.includes(alias)) {
+      targets.forEach(t => expanded.add(t));
+    }
+    // También buscar inverso: si el usuario dice un target, agregar el alias
+    if (targets.some(t => lower.includes(t))) {
+      expanded.add(alias);
+    }
+  }
+
+  // Buscar en alias aprendidos
+  for (const [key, values] of learnedAliases) {
+    if (lower.includes(key)) {
+      values.forEach(v => expanded.add(v));
+    }
+  }
+
+  // Extraer palabras individuales si el término tiene más de una palabra
+  const words = lower.split(/\s+/);
+  words.forEach(word => {
+    if (word.length > 3 && productAliases[word]) {
+      productAliases[word].forEach(t => expanded.add(t));
+    }
+  });
+
+  return Array.from(expanded);
+}
+
+/**
+ * Aprende una relación nueva cuando una búsqueda tiene éxito.
+ * Si el usuario buscó "tenis rojo" y encontró "Zapatilla Lacoste Roja",
+ * se aprende que "tenis" → "zapatilla lacoste"
+ */
+function learnProductRelation(userTerm: string, foundProductName: string) {
+  const key = userTerm.toLowerCase().trim().split(/\s+/)[0]; // primera palabra
+  if (key.length < 3) return;
+  
+  const productWords = foundProductName.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  if (productWords.length === 0) return;
+
+  if (!learnedAliases.has(key)) {
+    learnedAliases.set(key, new Set());
+  }
+  const aliases = learnedAliases.get(key)!;
+  productWords.slice(0, 3).forEach(w => {
+    if (w !== key) aliases.add(w);
+  });
+
+  // Limitar tamaño
+  if (aliases.size > 15) {
+    const arr = Array.from(aliases);
+    learnedAliases.set(key, new Set(arr.slice(-10)));
+  }
+}
+
+
+// 3. Caché de manual operativo en memoria (10 minutos)
 const manualCache: { [tenantId: string]: { manual: string | null; timestamp: number } } = {};
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+const CACHE_TTL = 10 * 60 * 1000;
 
 async function getCachedOperationalManual(tenantId: string): Promise<string | null> {
   const now = Date.now();
@@ -73,7 +305,7 @@ async function getCachedOperationalManual(tenantId: string): Promise<string | nu
     return manualCache[tenantId].manual;
   }
 
-  console.log(`🔒 Caché expirada o vacía. Recuperando manual operativo desde InsForge para: ${tenantId}...`);
+  console.log(`🔒 Recuperando manual desde InsForge para: ${tenantId}...`);
   try {
     const { data: company } = await insforge.database
       .from('companies')
@@ -86,8 +318,69 @@ async function getCachedOperationalManual(tenantId: string): Promise<string | nu
     return manual;
   } catch (err) {
     console.error('⚠️ Error al consultar manual en InsForge:', err);
-    return manualCache[tenantId]?.manual || null; // Fallback a la caché vieja si falla la red
+    return manualCache[tenantId]?.manual || null;
   }
+}
+
+// ─── MEMORIA DE CONVERSACIÓN ───────────────────────────────────────────────────
+// Almacena últimos mensajes por sesión (tenant+ip simplificado como key)
+interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+}
+
+const conversationMemory: Map<string, ConversationMessage[]> = new Map();
+const MEMORY_MAX_MESSAGES = 8; // últimos 8 mensajes (4 intercambios)
+const MEMORY_TTL = 15 * 60 * 1000; // 15 min sin actividad = reset
+
+function getConversationKey(tenantId: string, userId?: string): string {
+  return `${tenantId}:${userId || 'anon'}`;
+}
+
+function getConversationHistory(key: string): ConversationMessage[] {
+  const messages = conversationMemory.get(key) || [];
+  const now = Date.now();
+  // Limpiar si la última actividad fue hace más de 15 min
+  if (messages.length > 0 && (now - messages[messages.length - 1].timestamp) > MEMORY_TTL) {
+    conversationMemory.delete(key);
+    return [];
+  }
+  return messages;
+}
+
+function addToConversation(key: string, role: 'user' | 'assistant', content: string) {
+  if (!conversationMemory.has(key)) {
+    conversationMemory.set(key, []);
+  }
+  const messages = conversationMemory.get(key)!;
+  messages.push({ role, content: content.substring(0, 200), timestamp: Date.now() });
+  // Mantener solo los últimos N mensajes
+  if (messages.length > MEMORY_MAX_MESSAGES) {
+    messages.splice(0, messages.length - MEMORY_MAX_MESSAGES);
+  }
+}
+
+// ─── SISTEMA DE APRENDIZAJE (acierto/error) ────────────────────────────────────
+// Patrones que el LLM ha fallado → se agregan como instrucciones negativas al prompt
+const learningCache: Map<string, string[]> = new Map();
+
+function getLearnings(tenantId: string): string {
+  const lessons = learningCache.get(tenantId) || [];
+  if (lessons.length === 0) return '';
+  return `\nAPRENDIZAJES PREVIOS (evitar estos errores):\n${lessons.map(l => `- ${l}`).join('\n')}\n`;
+}
+
+function addLearning(tenantId: string, lesson: string) {
+  if (!learningCache.has(tenantId)) {
+    learningCache.set(tenantId, []);
+  }
+  const lessons = learningCache.get(tenantId)!;
+  if (!lessons.includes(lesson)) {
+    lessons.push(lesson);
+    if (lessons.length > 10) lessons.shift(); // max 10 lecciones
+  }
+}
 }
 
 // 4. Cliente IA — Groq (primario) + OpenRouter (fallback)
@@ -167,29 +460,56 @@ async function callLLM(systemPrompt: string, userMessage: string, maxTokens: num
 }
 
 /**
- * Genera la respuesta del bot en base al manual y el contexto recuperado (Única llamada al LLM)
+ * Genera la respuesta del bot con memoria de contexto y aprendizaje
  */
 async function generateHumanResponse(
   userQuery: string,
   retrievedData: any[],
   type: 'SQL' | 'SEMANTIC' | 'SALUDO_SOPORTE_GENERAL',
-  operationalManual: string | null
+  operationalManual: string | null,
+  conversationKey?: string,
+  tenantId?: string
 ): Promise<string> {
   let contextString = '';
-  if (type === 'SQL') {
-    contextString = `RESULTADOS DE INVENTARIO:\n${JSON.stringify(retrievedData, null, 2)}`;
-  } else if (type === 'SEMANTIC') {
-    contextString = `INFORMACIÓN RELEVANTE:\n${retrievedData.map((r: any, i: number) => `[${i+1}]: ${r.content}`).join('\n')}`;
+  if (type === 'SQL' && retrievedData.length > 0) {
+    contextString = `DATOS:\n${JSON.stringify(retrievedData.slice(0, 8), null, 1)}`;
+  } else if (type === 'SEMANTIC' && retrievedData.length > 0) {
+    contextString = `INFO:\n${retrievedData.map((r: any, i: number) => `${i+1}. ${r.content}`).join('\n')}`;
   }
 
-  const fallbackManual = `Eres Asistente de Ventas. Habla en español de forma empática y concisa.`;
+  const fallbackManual = `Eres un asistente de ventas amable y conciso. Hablas en español.`;
   const activeManual = operationalManual || fallbackManual;
 
+  // Construir historial de conversación
+  let historyString = '';
+  if (conversationKey) {
+    const history = getConversationHistory(conversationKey);
+    if (history.length > 0) {
+      historyString = `\nCONVERSACIÓN RECIENTE:\n${history.map(m => `${m.role === 'user' ? 'Cliente' : 'Tú'}: ${m.content}`).join('\n')}\n`;
+    }
+  }
+
+  // Aprendizajes del tenant
+  const learnings = tenantId ? getLearnings(tenantId) : '';
+
   const systemPrompt = `${activeManual}
+${learnings}${contextString ? `\n${contextString}\n` : ''}${historyString}
+ESTILO: Respuestas CORTAS y directas (1-3 frases). Usa el historial para entender el contexto sin pedir info que ya dieron. NO repitas saludos si ya saludaste. Sé natural como WhatsApp.`;
 
-${contextString ? `DATOS CONSULTADOS:\n${contextString}\n` : ''}REGLAS: Responde en base al contexto. NO inventes datos. Si hay productos, menciona nombre y precio. Sé conciso.`;
+  const response = await callLLM(systemPrompt, userQuery, 200);
 
-  return await callLLM(systemPrompt, userQuery, 300);
+  // Guardar en memoria
+  if (conversationKey) {
+    addToConversation(conversationKey, 'user', userQuery);
+    addToConversation(conversationKey, 'assistant', response);
+  }
+
+  // Detectar respuestas malas para aprendizaje
+  if (tenantId && retrievedData.length > 0 && response.includes('no tenemos') && retrievedData.length > 0) {
+    addLearning(tenantId, `Cuando hay productos en DATOS, NUNCA digas "no tenemos". Muestra los productos encontrados.`);
+  }
+
+  return response;
 }
 
 /**
@@ -272,8 +592,10 @@ function classifyIntentHeuristically(query: string): { type: 'SALUDO_SOPORTE_GEN
 /**
  * Enrutador híbrido de alto rendimiento.
  */
-export async function hybridQuery(tenantId: string, userQuery: string) {
+export async function hybridQuery(tenantId: string, userQuery: string, userId?: string) {
   console.log(`📨 Query recibida | tenant: ${tenantId} | prompt: "${userQuery.substring(0, 50)}"`);
+  
+  const conversationKey = getConversationKey(tenantId, userId);
   
   // 1. Obtener manual operativo dinámico de la caché local
   const operationalManual = await getCachedOperationalManual(tenantId);
@@ -286,7 +608,7 @@ export async function hybridQuery(tenantId: string, userQuery: string) {
 
   // Flujo A: Saludo / Soporte General (1 sola llamada al LLM para responder)
   if (decision.type === 'SALUDO_SOPORTE_GENERAL') {
-    const humanResponse = await generateHumanResponse(userQuery, [], 'SALUDO_SOPORTE_GENERAL', operationalManual);
+    const humanResponse = await generateHumanResponse(userQuery, [], 'SALUDO_SOPORTE_GENERAL', operationalManual, conversationKey, tenantId);
     return {
       type: 'SALUDO_SOPORTE_GENERAL' as const,
       results: [],
@@ -306,7 +628,7 @@ export async function hybridQuery(tenantId: string, userQuery: string) {
       rawSqlResults = await executeSecureSql(tenantId, sqlQuery);
     }
     
-    const humanResponse = await generateHumanResponse(userQuery, rawSqlResults.results, 'SQL', operationalManual);
+    const humanResponse = await generateHumanResponse(userQuery, rawSqlResults.results, 'SQL', operationalManual, conversationKey, tenantId);
     return {
       ...rawSqlResults,
       humanResponse
@@ -326,14 +648,14 @@ export async function hybridQuery(tenantId: string, userQuery: string) {
         if (resp.ok) {
           const json = await resp.json() as any;
           if (json.agencies && json.agencies.length > 0) {
-            const humanResponse = await generateHumanResponse(userQuery, json.agencies, 'SQL', operationalManual);
+            const humanResponse = await generateHumanResponse(userQuery, json.agencies, 'SQL', operationalManual, conversationKey, tenantId);
             return { type: 'SQL' as const, results: json.agencies, humanResponse };
           }
         }
       } catch (e) { /* fallback to semantic */ }
     }
     const rawSemanticResults = await executeSemanticSearch(tenantId, decision.term);
-    const humanResponse = await generateHumanResponse(userQuery, rawSemanticResults.results, 'SEMANTIC', operationalManual);
+    const humanResponse = await generateHumanResponse(userQuery, rawSemanticResults.results, 'SEMANTIC', operationalManual, conversationKey, tenantId);
     return { ...rawSemanticResults, humanResponse };
   }
 
@@ -362,13 +684,13 @@ Responde SOLO JSON: {"origin":"ciudad o país","destination":"ciudad o país"}`;
         });
         if (resp.ok) {
           const json = await resp.json() as any;
-          const humanResponse = await generateHumanResponse(userQuery, json.options || [], 'SQL', operationalManual);
+          const humanResponse = await generateHumanResponse(userQuery, json.options || [], 'SQL', operationalManual, conversationKey, tenantId);
           return { type: 'SQL' as const, results: json.options || [], humanResponse };
         }
       } catch (e) { /* fallback */ }
     }
     // Fallback to general response
-    const humanResponse = await generateHumanResponse(userQuery, [], 'SALUDO_SOPORTE_GENERAL', operationalManual);
+    const humanResponse = await generateHumanResponse(userQuery, [], 'SALUDO_SOPORTE_GENERAL', operationalManual, conversationKey, tenantId);
     return { type: 'SALUDO_SOPORTE_GENERAL' as const, results: [], humanResponse };
   }
 
@@ -383,11 +705,11 @@ Responde SOLO JSON: {"origin":"ciudad o país","destination":"ciudad o país"}`;
       if (resp.ok) {
         const json = await resp.json() as any;
         const stores = json.stores || [];
-        const humanResponse = await generateHumanResponse(userQuery, stores, 'SQL', operationalManual);
+        const humanResponse = await generateHumanResponse(userQuery, stores, 'SQL', operationalManual, conversationKey, tenantId);
         return { type: 'SQL' as const, results: stores, humanResponse };
       }
     } catch (e) { /* fallback */ }
-    const humanResponse = await generateHumanResponse(userQuery, [], 'SALUDO_SOPORTE_GENERAL', operationalManual);
+    const humanResponse = await generateHumanResponse(userQuery, [], 'SALUDO_SOPORTE_GENERAL', operationalManual, conversationKey, tenantId);
     return { type: 'SALUDO_SOPORTE_GENERAL' as const, results: [], humanResponse };
   }
 
@@ -555,29 +877,15 @@ Si ninguno coincide, responde: NONE`;
 async function executeLiveRotteriSql(searchTerm: string) {
   console.log(`🔌 Buscando productos: "${searchTerm || '(todo)'}"`);
 
-  // Expandir sinónimos bilingües (aplica tanto para proxy como local)
-  const synonymMap: Record<string, string[]> = {
-    wig: ['peluca'], wigs: ['peluca'], peluca: ['wig'], pelucas: ['wig'],
-    sneaker: ['zapatilla'], sneakers: ['zapatilla'], zapatilla: ['sneaker'], zapatillas: ['sneaker'],
-    headphone: ['auricular'], headphones: ['auricular'], auricular: ['headphone'], auriculares: ['headphone'],
-    zapato: ['zapatilla'], zapatos: ['zapatilla'],
-  };
-
-  const terms = searchTerm ? [searchTerm] : [''];
-  if (searchTerm) {
-    const lower = searchTerm.toLowerCase();
-    for (const [key, synonyms] of Object.entries(synonymMap)) {
-      if (lower.includes(key)) {
-        synonyms.forEach(s => { if (!terms.includes(s)) terms.push(s); });
-      }
-    }
-  }
+  // Expandir con el sistema de alias inteligente
+  const expandedTerms = searchTerm ? expandSearchTerms(searchTerm) : [''];
+  console.log(`🔍 Términos expandidos: [${expandedTerms.join(', ')}]`);
 
   // ─── PRODUCCIÓN: llamar al proxy PHP ────────────────────────────────────────
   if (ROTTERI_PROXY_URL) {
-    // Enviar búsqueda al proxy con todos los sinónimos
-    const searchTerms = terms.filter(t => t.length > 0);
-    const effectiveTerm = searchTerms.length > 0 ? searchTerms[0] : '';
+    const searchTerms = expandedTerms.filter(t => t.length > 0);
+    // Enviar el término original + el primer sinónimo más relevante
+    const effectiveTerm = searchTerms.length > 0 ? searchTerms.slice(0, 3).join(' ') : '';
 
     try {
       const resp = await fetch(ROTTERI_PROXY_URL, {
@@ -595,14 +903,19 @@ async function executeLiveRotteriSql(searchTerm: string) {
       }
 
       const json = await resp.json() as { results: any[]; note?: string; count?: number };
-      const results = json.results || [];
+      let results = json.results || [];
       console.log(`✅ Proxy: ${results.length} producto(s), note: ${json.note || 'none'}`);
 
-      // Si el proxy devolvió catálogo completo (fallback) y tenemos término,
-      // usar Groq para filtrar semánticamente
+      // Si el proxy devolvió catálogo completo (fallback), usar Groq para filtrar
       if (json.note === 'fallback_catalog' && searchTerm && results.length > 5) {
-        const filtered = await smartFilterWithLLM(searchTerm, results);
-        return { type: 'SQL' as const, sql: '/* proxy+llm */', results: filtered };
+        results = await smartFilterWithLLM(searchTerm, results);
+      }
+
+      // Aprender relaciones de los productos encontrados
+      if (searchTerm && results.length > 0) {
+        results.slice(0, 3).forEach((p: any) => {
+          learnProductRelation(searchTerm, p.name || '');
+        });
       }
 
       return { type: 'SQL' as const, sql: '/* proxy */', results };
@@ -620,10 +933,10 @@ async function executeLiveRotteriSql(searchTerm: string) {
   let params: string[];
 
   if (!searchTerm) {
-    // Listar todos los productos disponibles
     mysqlQuery = `SELECT nombre, precio, cantidad, descripcion, imagen_url FROM productos WHERE cantidad > 0 ORDER BY nombre ASC LIMIT 10`;
     params = [];
   } else {
+    const terms = expandedTerms.filter(t => t.length > 0);
     const whereClauses = terms.map(() =>
       '(nombre LIKE ? OR descripcion LIKE ?)'
     ).join(' OR ');

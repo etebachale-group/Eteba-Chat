@@ -43,7 +43,8 @@ app.post('/api/query', async (req: express.Request, res: express.Response) => {
   }
 
   try {
-    const results = await hybridQuery(tenantId, prompt);
+    const userId = user?.id || user?.email || undefined;
+    const results = await hybridQuery(tenantId, prompt, userId);
     res.json(results);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error interno del servidor en RAG.' });

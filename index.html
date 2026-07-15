@@ -306,31 +306,52 @@
         <!-- Tab: Overview -->
         <div class="dash-tab active" id="tab-overview">
           <div class="dash-tab__header">
-            <h2>Bienvenido de vuelta</h2>
-            <p>Resumen de actividad de tu asistente</p>
+            <div class="dash-header-row">
+              <div>
+                <h2 id="dash-welcome">Bienvenido</h2>
+                <p id="dash-subtitle">Resumen de actividad de tu asistente</p>
+              </div>
+              <div class="dash-header-actions">
+                <span class="dash-status"><span class="dash-status__dot"></span> Asistente activo</span>
+              </div>
+            </div>
           </div>
           <div class="metrics__grid">
-            <div class="metric-card">
-              <div class="metric-card__value">1,284</div>
+            <div class="metric-card" id="metric-queries">
+              <div class="metric-card__value" id="val-queries">—</div>
               <div class="metric-card__label">Consultas este mes</div>
-              <div class="metric-card__trend metric-card__trend--up">+12%</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-card__value">89</div>
+            <div class="metric-card" id="metric-orders">
+              <div class="metric-card__value" id="val-orders">—</div>
               <div class="metric-card__label">Pedidos generados</div>
-              <div class="metric-card__trend metric-card__trend--up">+8%</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-card__value">94%</div>
-              <div class="metric-card__label">Tasa de resolución</div>
-              <div class="metric-card__trend metric-card__trend--up">+3%</div>
+            <div class="metric-card" id="metric-products">
+              <div class="metric-card__value" id="val-products">—</div>
+              <div class="metric-card__label">Productos activos</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-card__value">2.1s</div>
+            <div class="metric-card" id="metric-response">
+              <div class="metric-card__value">~1s</div>
               <div class="metric-card__label">Tiempo respuesta</div>
-              <div class="metric-card__trend metric-card__trend--down">-0.4s</div>
+              <div class="metric-card__trend metric-card__trend--down">Groq</div>
             </div>
           </div>
+
+          <!-- Quick Actions -->
+          <div class="dash-quick-actions">
+            <button class="dash-quick-btn" data-tab="catalog">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              Agregar producto
+            </button>
+            <button class="dash-quick-btn" data-tab="config">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281"/></svg>
+              Editar asistente
+            </button>
+            <button class="dash-quick-btn" id="btn-test-chat">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+              Probar chat
+            </button>
+          </div>
+
           <div class="dash-tab__row">
             <div class="card">
               <h3 class="card__title">Últimos Pedidos</h3>
@@ -339,9 +360,9 @@
               </div>
             </div>
             <div class="card">
-              <h3 class="card__title">Productos Más Consultados</h3>
-              <div id="top-products">
-                <p class="text-muted">Cargando datos...</p>
+              <h3 class="card__title">Actividad Reciente</h3>
+              <div id="top-products" class="activity-feed">
+                <p class="text-muted">Sin actividad reciente.</p>
               </div>
             </div>
           </div>
