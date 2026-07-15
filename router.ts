@@ -381,7 +381,6 @@ function addLearning(tenantId: string, lesson: string) {
     if (lessons.length > 10) lessons.shift(); // max 10 lecciones
   }
 }
-}
 
 // 4. Cliente IA — Groq (primario) + OpenRouter (fallback)
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
