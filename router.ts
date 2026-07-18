@@ -5,6 +5,102 @@ import { createClient } from '@insforge/sdk';
 import { getExtractor } from './ingest.js';
 import pg from 'pg';
 
+// ─── Tenant Data Connectors ────────────────────────────────────────────────────
+import { connectorCache } from './connector-cache.js';
+import { getConnectorRaw } from './connector-registry.js';
+import { proxyDispatcher } from './proxy-dispatcher.js';
+import { healthTracker } from './health-tracker.js';
+import { rateLimiter } from './rate-limiter.js';
+import { mapIntentToAction, getBusinessTypeKeywords, getSystemPromptInstructions } from './intent-mapper.js';
+import { updateConnectorStatus } from './connector-registry.js';
+
+// Wire health tracker callback once at module load
+healthTracker.setStatusChangeCallback(async (tenantId, status, error) => {
+  await updateConnectorStatus(tenantId, status, error);
+});
+
+// Startup validation for Rotteri env-var config (Req 13.4)
+if (process.env.ROTTERI_PROXY_URL && !process.env.ROTTERI_PROXY_TOKEN) {
+  console.warn('⚠️  ROTTERI_PROXY_URL is set but ROTTERI_PROXY_TOKEN is missing. Rotteri requests will be rejected.');
+}
+
+/**
+ * Tries to dispatch a query to the tenant's configured external connector.
+ * Returns proxy results, or null if no active connector exists or dispatch fails.
+ * Implements Requirements 8.1–8.7, 13.1–13.5
+ */
+async function tryConnectorDispatch(tenantId: string, userQuery: string, decision: { type: string; term: string }): Promise<{ results: any[]; humanContext: string } | null> {
+  const rotteriTenantId = 'e22e9ee0-d29a-4172-88de-fb9ad14c9c1b';
+
+  // 1. Check in-memory cache first
+  let config = connectorCache.get(tenantId);
+
+  // 2. If not cached, try DB registry
+  if (!config) {
+    try {
+      config = await getConnectorRaw(tenantId);
+      if (config) connectorCache.set(tenantId, config);
+    } catch {
+      config = null;
+    }
+  }
+
+  // 3. Rotteri env-var fallback (Req 13.1, 13.2)
+  if (!config && tenantId === rotteriTenantId) {
+    const proxyUrl = process.env.ROTTERI_PROXY_URL;
+    const proxyToken = process.env.ROTTERI_PROXY_TOKEN;
+    if (proxyUrl && proxyToken) {
+      // Synthesize a minimal config for the dispatcher
+      config = {
+        id: 'rotteri-env',
+        tenant_id: tenantId,
+        proxy_url: proxyUrl,
+        connector_token: proxyToken,
+        business_type: 'ecommerce',
+        display_name: 'Rotteri (env)',
+        enabled: true,
+        status: 'active',
+        failure_count: 0,
+        last_error: null,
+        last_error_at: null,
+        created_at: '',
+        updated_at: '',
+      };
+    } else if (proxyUrl && !proxyToken) {
+      // Req 13.4: URL set but token missing → reject
+      console.warn(`⚠️ Rotteri connector config incomplete (missing token). Rejecting proxy dispatch.`);
+      return null;
+    }
+  }
+
+  // 4. No connector available → fall back
+  if (!config || !config.enabled || config.status === 'error') return null;
+
+  // 5. Rate limiting (Req 11.5, 11.6)
+  if (!rateLimiter.isAllowed(tenantId)) {
+    const retryAfter = rateLimiter.getRetryAfter(tenantId);
+    console.warn(`⚡ Rate limit exceeded for tenant ${tenantId}. Retry after ${retryAfter}s`);
+    return null;
+  }
+  rateLimiter.record(tenantId);
+
+  // 6. Map intent to action (Req 8.7)
+  const { action, params } = mapIntentToAction(decision.type, config.business_type, userQuery);
+  console.log(`🔗 Connector dispatch | tenant: ${tenantId} | action: ${action}`);
+
+  // 7. Dispatch
+  const proxyResponse = await proxyDispatcher.dispatch(config, { action, params });
+
+  if (proxyResponse.error) {
+    await healthTracker.recordFailure(tenantId, proxyResponse.error);
+    return null; // Fall back to Postgres
+  }
+
+  healthTracker.recordSuccess(tenantId);
+  const results = Array.isArray(proxyResponse.data) ? proxyResponse.data : (proxyResponse.data ? [proxyResponse.data] : []);
+  return { results, humanContext: getSystemPromptInstructions(config.business_type) };
+}
+
 const { Pool } = pg;
 
 // 1. Validar variables de entorno clave
@@ -82,6 +178,9 @@ const productAliases: Record<string, string[]> = {
   'shoes': ['zapato', 'zapatilla', 'chaussure'],
   'sneaker': ['zapatilla', 'basket', 'tenis'],
   'sneakers': ['zapatilla', 'basket', 'tenis'],
+  'nike': ['air force', 'basket', 'zapatilla', 'sneaker'],
+  'adidas': ['basket', 'zapatilla', 'sneaker', 'superstar'],
+  'puma': ['basket', 'zapatilla', 'sneaker'],
   'sandal': ['sandalia', 'sandale', 'chancla'],
   'sandale': ['sandalia', 'sandal', 'chancla'],
   'sandalia': ['sandal', 'sandale', 'chancla'],
@@ -628,6 +727,13 @@ export async function hybridQuery(tenantId: string, userQuery: string, userId?: 
 
   // Flujo B: Consulta de catálogo en MySQL local (1 sola llamada al LLM para responder)
   if (decision.type === 'CATALOGO_SQL') {
+    // Try external connector first (Req 8.1)
+    const connectorResult = await tryConnectorDispatch(tenantId, userQuery, decision);
+    if (connectorResult) {
+      const humanResponse = await generateHumanResponse(userQuery, connectorResult.results, 'SQL', operationalManual, conversationKey, tenantId);
+      return { type: 'SQL' as const, results: connectorResult.results, humanResponse };
+    }
+
     let rawSqlResults;
     if (tenantId === rotteriTenantId) {
       // Para Rotteri: pasar solo el término de búsqueda (el proxy/MySQL local maneja la query)
@@ -845,10 +951,17 @@ async function executeLiveRotteriSql(searchTerm: string) {
 
   // ─── PRODUCCIÓN: llamar al proxy PHP ────────────────────────────────────────
   if (ROTTERI_PROXY_URL) {
-    const searchTerms = expandedTerms.filter(t => t.length > 0);
-    // Enviar el término original + el primer sinónimo más relevante
-    const effectiveTerm = searchTerms.length > 0 ? searchTerms.slice(0, 3).join(' ') : '';
+    // Estrategia: enviar múltiples llamadas al proxy con términos individuales
+    // porque el LIKE del proxy busca un solo string. Los productos están en francés/inglés
+    // pero los usuarios buscan en español, así que cada sinónimo se busca por separado.
+    const searchTerms = expandedTerms.filter(t => t.length > 0 && t.length <= 50);
+    
+    // Primero intentar con el término original
+    let allResults: any[] = [];
+    let finalNote = 'like_match';
+    const seenIds = new Set<number>();
 
+    // Enviar el término original primero
     try {
       const resp = await fetch(ROTTERI_PROXY_URL, {
         method: 'POST',
@@ -856,35 +969,99 @@ async function executeLiveRotteriSql(searchTerm: string) {
           'Content-Type': 'application/json',
           'X-Chat-Token': ROTTERI_PROXY_TOKEN,
         },
-        body: JSON.stringify({ action: 'search_products', term: effectiveTerm, limit: 30 }),
+        body: JSON.stringify({ action: 'search_products', term: searchTerm, limit: 15 }),
       });
 
-      if (!resp.ok) {
-        console.error(`⚠️ Proxy error [${resp.status}]`);
+      if (resp.ok) {
+        const json = await resp.json() as { results: any[]; note?: string; count?: number };
+        if (json.note === 'like_match' && json.results && json.results.length > 0) {
+          // El término original encontró resultados directos
+          for (const p of json.results) {
+            if (!seenIds.has(p.id)) { seenIds.add(p.id); allResults.push(p); }
+          }
+        } else {
+          finalNote = json.note || 'fallback_catalog';
+        }
+      }
+    } catch (err: any) {
+      console.error('⚠️ Proxy fetch error (original term):', err.message);
+    }
+
+    // Si el término original no encontró nada, intentar con cada sinónimo individualmente
+    if (allResults.length === 0 && searchTerms.length > 1) {
+      const synonymsToTry = searchTerms
+        .filter(t => t !== searchTerm.toLowerCase().trim())
+        .slice(0, 4); // max 4 sinónimos para no saturar
+
+      for (const synonym of synonymsToTry) {
+        try {
+          const resp = await fetch(ROTTERI_PROXY_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Chat-Token': ROTTERI_PROXY_TOKEN,
+            },
+            body: JSON.stringify({ action: 'search_products', term: synonym, limit: 10 }),
+          });
+
+          if (resp.ok) {
+            const json = await resp.json() as { results: any[]; note?: string };
+            if (json.note === 'like_match' && json.results && json.results.length > 0) {
+              for (const p of json.results) {
+                if (!seenIds.has(p.id)) { seenIds.add(p.id); allResults.push(p); }
+              }
+              finalNote = 'like_match';
+            }
+          }
+        } catch { /* skip failed synonym */ }
+
+        // Si ya tenemos suficientes resultados, parar
+        if (allResults.length >= 10) break;
+      }
+    }
+
+    // Si después de todos los sinónimos aún no hay nada, hacer un último intento con fallback
+    if (allResults.length === 0) {
+      try {
+        const resp = await fetch(ROTTERI_PROXY_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Chat-Token': ROTTERI_PROXY_TOKEN,
+          },
+          body: JSON.stringify({ action: 'search_products', term: '', limit: 30 }),
+        });
+
+        if (resp.ok) {
+          const json = await resp.json() as { results: any[]; note?: string };
+          allResults = json.results || [];
+          finalNote = 'fallback_catalog';
+        }
+      } catch (err: any) {
+        console.error('⚠️ Proxy fetch error (fallback):', err.message);
         return { type: 'SQL' as const, sql: '/* proxy error */', results: [] };
       }
-
-      const json = await resp.json() as { results: any[]; note?: string; count?: number };
-      let results = json.results || [];
-      console.log(`✅ Proxy: ${results.length} producto(s), note: ${json.note || 'none'}`);
-
-      // Si el proxy devolvió catálogo completo (fallback), usar Groq para filtrar
-      if (json.note === 'fallback_catalog' && searchTerm && results.length > 5) {
-        results = await smartFilterWithLLM(searchTerm, results);
-      }
-
-      // Aprender relaciones de los productos encontrados
-      if (searchTerm && results.length > 0) {
-        results.slice(0, 3).forEach((p: any) => {
-          learnProductRelation(searchTerm, p.name || '');
-        });
-      }
-
-      return { type: 'SQL' as const, sql: '/* proxy */', results };
-    } catch (err: any) {
-      console.error('⚠️ Proxy fetch error:', err.message);
-      return { type: 'SQL' as const, sql: '/* proxy error */', results: [] };
     }
+
+    let results = allResults;
+    console.log(`✅ Proxy: ${results.length} producto(s), note: ${finalNote}`);
+
+    // Solo usar LLM para filtrar si fue un fallback completo del catálogo
+    if (finalNote === 'fallback_catalog' && searchTerm && results.length > 5) {
+      results = await smartFilterWithLLM(searchTerm, results);
+    }
+
+    // Limitar a 10 resultados máximo para la respuesta del chat
+    results = results.slice(0, 10);
+
+    // Aprender relaciones de los productos encontrados
+    if (searchTerm && results.length > 0) {
+      results.slice(0, 3).forEach((p: any) => {
+        learnProductRelation(searchTerm, p.name || '');
+      });
+    }
+
+    return { type: 'SQL' as const, sql: '/* proxy */', results };
   }
 
   // ─── LOCAL: MySQL directo ────────────────────────────────────────────────────

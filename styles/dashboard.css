@@ -628,3 +628,72 @@
     padding: var(--space-md);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   DATA CONNECTOR SECTION — Requirements 9.1, 9.4
+   ═══════════════════════════════════════════════════════════════ */
+
+.connector-section {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+.connector-section__title { font-size: 1.1rem; font-weight: 700; margin-bottom: .25rem; }
+.connector-section__desc  { font-size: .875rem; color: #666; margin-bottom: 1rem; }
+
+/* Status badge */
+.connector-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .25rem .75rem;
+  border-radius: 999px;
+  font-size: .8rem;
+  font-weight: 600;
+  background: #f0f0f0;
+  margin-bottom: 1rem;
+}
+.connector-badge--hidden { display: none; }
+.connector-dot--active   { color: #22c55e; }
+.connector-dot--inactive { color: #9ca3af; }
+.connector-dot--error    { color: #ef4444; }
+
+/* Form */
+.connector-form { display: flex; flex-direction: column; gap: .875rem; }
+.connector-form__token-row .input-with-action {
+  display: flex;
+  gap: .5rem;
+}
+.connector-form__token-row input { flex: 1; }
+.connector-form__actions {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Messages */
+.connector-msg { font-size: .85rem; min-height: 1.25rem; margin-top: .25rem; }
+.connector-msg--ok    { color: #16a34a; }
+.connector-msg--error { color: #dc2626; }
+
+/* Test & Template */
+.connector-test, .connector-template {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .75rem;
+}
+.connector-template h4 { width: 100%; margin: 0 0 .5rem; font-size: .9rem; font-weight: 600; }
+.connector-template select { flex: 1; min-width: 140px; }
+
+@media (max-width: 480px) {
+  .connector-form__token-row .input-with-action { flex-direction: column; }
+  .connector-test, .connector-template { flex-direction: column; align-items: flex-start; }
+}

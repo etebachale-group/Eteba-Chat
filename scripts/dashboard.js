@@ -767,3 +767,221 @@ const Dashboard = (() => {
 
   return { init, loadDashboardData, displayTenantInfo, showConfirmDialog };
 })();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATA CONNECTOR SECTION
+// Requirements: 9.1–9.7, 10.4, 11.7–11.8, 12.5
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ConnectorManager = (() => {
+  const API_BASE = window.location.origin;
+
+  function getAuthHeader() {
+    const token = localStorage.getItem('eteba_auth_token') || sessionStorage.getItem('eteba_auth_token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
+
+  /** Inject the connector section HTML into the dashboard */
+  function injectSection() {
+    const target = document.getElementById('connector-section') || document.getElementById('settings-tab') || document.querySelector('[data-tab="settings"]');
+    if (!target) return;
+
+    target.insertAdjacentHTML('beforeend', `
+      <section class="connector-section card" id="connector-card">
+        <h3 class="connector-section__title">🔌 Conector de Datos</h3>
+        <p class="connector-section__desc">Conecta tu base de datos externa al asistente de IA.</p>
+
+        <!-- Status badge -->
+        <div id="connector-status-badge" class="connector-badge connector-badge--hidden">
+          <span id="connector-status-dot" class="connector-dot"></span>
+          <span id="connector-status-text">–</span>
+        </div>
+
+        <!-- Form -->
+        <form id="connector-form" class="connector-form" novalidate>
+          <div class="form-group">
+            <label for="connector-display-name">Nombre del conector *</label>
+            <input type="text" id="connector-display-name" placeholder="Mi Tienda Online" maxlength="128" required />
+          </div>
+          <div class="form-group">
+            <label for="connector-proxy-url">URL del proxy (HTTPS) *</label>
+            <input type="url" id="connector-proxy-url" placeholder="https://mi-sitio.com/proxy.php" required />
+          </div>
+          <div class="form-group connector-form__token-row">
+            <label for="connector-token">Token de autenticación *</label>
+            <div class="input-with-action">
+              <input type="text" id="connector-token" placeholder="64-char hex token" required />
+              <button type="button" id="btn-generate-token" class="btn btn--sm btn--secondary">Generar</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="connector-business-type">Tipo de negocio</label>
+            <select id="connector-business-type">
+              <option value="general">General</option>
+              <option value="ecommerce">E-commerce</option>
+              <option value="appointments">Citas / Clínica</option>
+              <option value="restaurant">Restaurante</option>
+              <option value="services">Servicios</option>
+            </select>
+          </div>
+
+          <div class="connector-form__actions">
+            <button type="submit" class="btn btn--primary" id="btn-save-connector">Guardar</button>
+            <button type="button" class="btn btn--danger btn--sm" id="btn-delete-connector" style="display:none">Eliminar</button>
+          </div>
+          <p id="connector-form-msg" class="connector-msg" aria-live="polite"></p>
+        </form>
+
+        <!-- Test connection -->
+        <div class="connector-test">
+          <button type="button" class="btn btn--secondary" id="btn-test-connector">🔁 Probar Conexión</button>
+          <p id="connector-test-msg" class="connector-msg" aria-live="polite"></p>
+        </div>
+
+        <!-- Template download -->
+        <div class="connector-template">
+          <h4>📄 Descargar plantilla proxy</h4>
+          <select id="template-language">
+            <option value="nodejs">Node.js (Express)</option>
+            <option value="php">PHP</option>
+            <option value="python">Python (Flask)</option>
+          </select>
+          <button type="button" class="btn btn--secondary btn--sm" id="btn-download-template">Descargar</button>
+        </div>
+      </section>
+    `);
+
+    bindEvents();
+    loadConnector();
+  }
+
+  function bindEvents() {
+    document.getElementById('connector-form')?.addEventListener('submit', saveConnector);
+    document.getElementById('btn-generate-token')?.addEventListener('click', generateToken);
+    document.getElementById('btn-test-connector')?.addEventListener('click', testConnector);
+    document.getElementById('btn-delete-connector')?.addEventListener('click', deleteConnector);
+    document.getElementById('btn-download-template')?.addEventListener('click', downloadTemplate);
+  }
+
+  function setMsg(id, text, isError = false) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.className = `connector-msg${isError ? ' connector-msg--error' : ' connector-msg--ok'}`;
+  }
+
+  function setStatus(status) {
+    const badge = document.getElementById('connector-status-badge');
+    const dot = document.getElementById('connector-status-dot');
+    const text = document.getElementById('connector-status-text');
+    if (!badge || !dot || !text) return;
+
+    badge.classList.remove('connector-badge--hidden');
+    const map = { active: ['🟢', 'Activo'], inactive: ['⚫', 'Inactivo'], error: ['🔴', 'Error'] };
+    const [icon, label] = map[status] || ['⚪', status];
+    dot.textContent = icon;
+    text.textContent = label;
+    dot.className = `connector-dot connector-dot--${status}`;
+  }
+
+  async function loadConnector() {
+    try {
+      const res = await fetch(`${API_BASE}/api/connectors`, { headers: getAuthHeader() });
+      if (res.status === 404) { showEmptyForm(); return; }
+      const { connector } = await res.json();
+      if (connector) populateForm(connector);
+    } catch { showEmptyForm(); }
+  }
+
+  function showEmptyForm() {
+    document.getElementById('btn-delete-connector').style.display = 'none';
+    setStatus('inactive');
+  }
+
+  function populateForm(c) {
+    document.getElementById('connector-display-name').value = c.display_name || '';
+    document.getElementById('connector-proxy-url').value = c.proxy_url || '';
+    document.getElementById('connector-token').value = c.connector_token || '';
+    document.getElementById('connector-business-type').value = c.business_type || 'general';
+    document.getElementById('btn-delete-connector').style.display = 'inline-block';
+    setStatus(c.status || 'active');
+  }
+
+  async function saveConnector(e) {
+    e.preventDefault();
+    const displayName = document.getElementById('connector-display-name').value.trim();
+    const proxyUrl = document.getElementById('connector-proxy-url').value.trim();
+    const token = document.getElementById('connector-token').value.trim();
+    const businessType = document.getElementById('connector-business-type').value;
+
+    if (!displayName || !proxyUrl || !token) { setMsg('connector-form-msg', 'Completa todos los campos obligatorios.', true); return; }
+    if (!proxyUrl.startsWith('https://')) { setMsg('connector-form-msg', 'La URL debe comenzar con https://', true); return; }
+
+    const body = { display_name: displayName, proxy_url: proxyUrl, connector_token: token, business_type: businessType };
+
+    // Try PUT first, fall back to POST
+    let res = await fetch(`${API_BASE}/api/connectors`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, body: JSON.stringify(body) });
+    if (res.status === 404) {
+      res = await fetch(`${API_BASE}/api/connectors`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, body: JSON.stringify(body) });
+    }
+
+    const json = await res.json();
+    if (!res.ok) { setMsg('connector-form-msg', json.error || 'Error al guardar', true); return; }
+    setMsg('connector-form-msg', '✅ Conector guardado correctamente.');
+    populateForm(json.connector);
+  }
+
+  async function deleteConnector() {
+    if (!confirm('¿Eliminar el conector? Se detendrá toda comunicación con el proxy.')) return;
+    const res = await fetch(`${API_BASE}/api/connectors`, { method: 'DELETE', headers: getAuthHeader() });
+    if (res.ok) { setMsg('connector-form-msg', 'Conector eliminado.'); showEmptyForm(); }
+    else { const j = await res.json(); setMsg('connector-form-msg', j.error || 'Error al eliminar', true); }
+  }
+
+  async function generateToken() {
+    const res = await fetch(`${API_BASE}/api/connectors/generate-token`, { method: 'POST', headers: getAuthHeader() });
+    const { token } = await res.json();
+    if (token) document.getElementById('connector-token').value = token;
+  }
+
+  async function testConnector() {
+    const proxyUrl = document.getElementById('connector-proxy-url').value.trim();
+    const token = document.getElementById('connector-token').value.trim();
+    if (!proxyUrl || !token) { setMsg('connector-test-msg', 'Ingresa URL y token antes de probar.', true); return; }
+    setMsg('connector-test-msg', '⏳ Probando conexión…');
+    try {
+      const res = await fetch(`${API_BASE}/api/connectors/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify({ proxy_url: proxyUrl, connector_token: token }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMsg('connector-test-msg', `✅ Conexión exitosa — tipo: ${json.data?.business_type || '?'}, versión: ${json.data?.version || '?'}`);
+        setStatus('active');
+      } else {
+        const hint = json.error?.includes('timeout') ? 'El proxy no respondió a tiempo. Verifica que esté en línea.'
+          : json.error?.includes('auth') ? 'Token incorrecto. Verifica que coincida con el proxy.'
+          : 'El proxy no está accesible. Verifica la URL.';
+        setMsg('connector-test-msg', `❌ ${json.error || 'Fallo'} — ${hint}`, true);
+        setStatus('error');
+      }
+    } catch { setMsg('connector-test-msg', '❌ Error de red al contactar el servidor.', true); }
+  }
+
+  function downloadTemplate() {
+    const lang = document.getElementById('template-language').value;
+    const bizType = document.getElementById('connector-business-type').value || 'general';
+    const token = encodeURIComponent(localStorage.getItem('eteba_auth_token') || '');
+    window.location.href = `${API_BASE}/api/connectors/template?language=${lang}&businessType=${bizType}&token=${token}`;
+  }
+
+  return { init: injectSection };
+})();
+
+// Auto-init when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => ConnectorManager.init());
+} else {
+  ConnectorManager.init();
+}

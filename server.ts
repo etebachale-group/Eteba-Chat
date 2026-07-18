@@ -9,6 +9,23 @@ import { fileURLToPath } from 'url';
 import { createClient } from '@insforge/sdk';
 import { hybridQuery } from './router.js';
 import { ingestKnowledge } from './ingest.js';
+import {
+  createConnector,
+  getConnector,
+  updateConnector,
+  deleteConnector,
+  updateConnectorStatus,
+} from './connector-registry.js';
+import { generateToken } from './connector-encryption.js';
+import { generateTemplate, type TemplateLanguage } from './template-generator.js';
+import { proxyDispatcher } from './proxy-dispatcher.js';
+import { healthTracker } from './health-tracker.js';
+import type { BusinessType } from './connector-cache.js';
+
+// Wire health tracker → registry (idempotent if router already wired it)
+healthTracker.setStatusChangeCallback(async (tenantId, status, error) => {
+  await updateConnectorStatus(tenantId, status, error);
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -404,6 +421,24 @@ app.post('/api/config', async (req: express.Request, res: express.Response) => {
   }
 });
 
+/**
+ * GET /api/config — Returns tenant config including connector health status (Req 10.4)
+ */
+app.get('/api/config', async (req: express.Request, res: express.Response) => {
+  const tenantId = req.query.tenantId as string;
+  if (!tenantId) { res.status(400).json({ error: 'Falta tenantId' }); return; }
+  try {
+    const connector = await getConnector(tenantId);
+    res.json({
+      connector: connector
+        ? { status: connector.status, enabled: connector.enabled, business_type: connector.business_type, display_name: connector.display_name }
+        : null,
+    });
+  } catch {
+    res.json({ connector: null });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // GOOGLE OAUTH 2.0
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -603,6 +638,128 @@ app.post('/auth/link', async (req: express.Request, res: express.Response) => {
   } catch (err: any) {
     res.json({ linked: false });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONNECTOR MANAGEMENT API (/api/connectors/*)
+// Requirements: 2.1–2.8, 9.5–9.7, 10.4, 11.7–11.8, 12.5
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Extract tenantId from the auth token in the request */
+function getTenantIdFromRequest(req: express.Request): string | null {
+  const auth = req.headers.authorization?.replace('Bearer ', '') || req.query.token as string;
+  if (!auth) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(auth, 'base64url').toString());
+    return payload.tenantId || payload.id || null;
+  } catch { return null; }
+}
+
+function handleConnectorError(err: unknown, res: express.Response) {
+  const e = err as any;
+  if (e?.status && typeof e.status === 'number') {
+    res.status(e.status).json({ error: e.message, missingFields: e.missingFields });
+    return;
+  }
+  console.error('Connector API error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+}
+
+// POST /api/connectors — Create
+app.post('/api/connectors', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  try {
+    const config = await createConnector(tenantId, req.body);
+    res.status(201).json({ connector: config });
+  } catch (err) { handleConnectorError(err, res); }
+});
+
+// GET /api/connectors — Read
+app.get('/api/connectors', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  try {
+    const config = await getConnector(tenantId);
+    if (!config) { res.status(404).json({ error: 'No connector found for this tenant' }); return; }
+    res.json({ connector: config });
+  } catch (err) { handleConnectorError(err, res); }
+});
+
+// PUT /api/connectors — Update
+app.put('/api/connectors', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  try {
+    const config = await updateConnector(tenantId, req.body);
+    res.json({ connector: config });
+  } catch (err) { handleConnectorError(err, res); }
+});
+
+// DELETE /api/connectors — Delete
+app.delete('/api/connectors', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  try {
+    await deleteConnector(tenantId);
+    res.json({ success: true });
+  } catch (err) { handleConnectorError(err, res); }
+});
+
+// POST /api/connectors/test — Ping the proxy
+app.post('/api/connectors/test', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  try {
+    const { proxy_url, connector_token } = req.body;
+    if (!proxy_url || !connector_token) {
+      res.status(400).json({ error: 'proxy_url and connector_token are required' });
+      return;
+    }
+    const tempConfig = {
+      id: 'test', tenant_id: tenantId, proxy_url, connector_token,
+      business_type: 'general' as BusinessType, display_name: 'test',
+      enabled: true, status: 'active' as const, failure_count: 0,
+      last_error: null, last_error_at: null, created_at: '', updated_at: '',
+    };
+    const result = await proxyDispatcher.dispatch(tempConfig, { action: 'ping', params: {} });
+    if (result.error) {
+      res.status(502).json({ success: false, error: result.error });
+    } else {
+      // Also reset health status if it was in error
+      await healthTracker.resetStatus(tenantId);
+      res.json({ success: true, data: result.data });
+    }
+  } catch (err) { handleConnectorError(err, res); }
+});
+
+// POST /api/connectors/generate-token — Generate a secure token
+app.post('/api/connectors/generate-token', (req: express.Request, res: express.Response) => {
+  res.json({ token: generateToken() });
+});
+
+// GET /api/connectors/template — Download proxy template
+app.get('/api/connectors/template', async (req: express.Request, res: express.Response) => {
+  const language = (req.query.language as TemplateLanguage) || 'nodejs';
+  const businessType = (req.query.businessType as BusinessType) || 'general';
+  const tenantId = getTenantIdFromRequest(req);
+
+  let connectorToken: string | undefined;
+  if (tenantId) {
+    try {
+      const cfg = await getConnector(tenantId);
+      // cfg.connector_token is masked — just use it as placeholder; user will see ****xxxx
+      connectorToken = cfg?.connector_token;
+    } catch { /* non-fatal */ }
+  }
+
+  try {
+    const content = generateTemplate(language, businessType, connectorToken);
+    const ext = language === 'php' ? 'php' : language === 'python' ? 'py' : 'js';
+    res.setHeader('Content-Disposition', `attachment; filename="eteba-proxy-${businessType}.${ext}"`);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(content);
+  } catch (err) { handleConnectorError(err, res); }
 });
 
 // Levantar el servidor
