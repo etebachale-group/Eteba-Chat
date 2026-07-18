@@ -4,6 +4,7 @@ dotenv.config({ path: '.env.local' });
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { createClient } from '@insforge/sdk';
 import { hybridQuery } from './router.js';
@@ -46,6 +47,13 @@ app.post('/api/query', async (req: express.Request, res: express.Response) => {
     const userId = user?.id || user?.email || undefined;
     const results = await hybridQuery(tenantId, prompt, userId);
     res.json(results);
+
+    // Fire-and-forget: track query in query_counts (non-blocking)
+    Promise.resolve(
+      insforge.database
+        .from('query_counts')
+        .insert([{ tenant_id: tenantId, query_text: prompt, user_id: userId, created_at: new Date().toISOString() }])
+    ).then(() => {}).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error interno del servidor en RAG.' });
   }
@@ -92,13 +100,40 @@ app.get('/api/orders', async (req: express.Request, res: express.Response) => {
       .from('pedidos_chat')
       .select('*')
       .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: false })
-      .limit(20);
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     res.json({ orders: data || [] });
   } catch (err: any) {
     res.json({ orders: [] });
+  }
+});
+
+/**
+ * API Endpoint para obtener conversaciones (queries recientes) de un tenant
+ * GET /api/conversations?tenantId=xxx&limit=50
+ */
+app.get('/api/conversations', async (req: express.Request, res: express.Response) => {
+  const tenantId = req.query.tenantId as string;
+  if (!tenantId) {
+    res.status(400).json({ error: 'Falta tenantId' });
+    return;
+  }
+
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 200);
+
+  try {
+    const { data, error } = await insforge.database
+      .from('query_counts')
+      .select('id, query_text, user_id, created_at')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    res.json({ conversations: data || [] });
+  } catch (err: any) {
+    res.json({ conversations: [] });
   }
 });
 
@@ -150,6 +185,191 @@ app.post('/api/catalog', async (req: express.Request, res: express.Response) => 
     res.json({ success: true, product: data?.[0] });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al agregar producto' });
+  }
+});
+
+/**
+ * API Endpoint para importar productos en bulk al catálogo
+ * POST /api/catalog/bulk
+ * Body: { tenantId, products: Array<{ name, description?, price, stock?, image_url? }> }
+ */
+app.post('/api/catalog/bulk', async (req: express.Request, res: express.Response) => {
+  const { tenantId, products } = req.body;
+
+  if (!tenantId) {
+    res.status(400).json({ error: 'Falta tenantId' });
+    return;
+  }
+
+  if (!products || !Array.isArray(products) || products.length === 0) {
+    res.status(400).json({ error: 'No hay productos para importar' });
+    return;
+  }
+
+  try {
+    const { data, error } = await insforge.database
+      .from('products')
+      .insert(products.map((p: any) => ({ tenant_id: tenantId, ...p })))
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, inserted: data?.length || products.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al importar productos' });
+  }
+});
+
+/**
+ * API Endpoint para actualizar un producto del catálogo
+ * PUT /api/catalog/:id
+ * Body: { tenantId, name, description, price, stock, image_url }
+ */
+app.put('/api/catalog/:id', async (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+  const { tenantId, name, description, price, stock, image_url } = req.body;
+
+  if (!tenantId) {
+    res.status(400).json({ error: 'Falta tenantId' });
+    return;
+  }
+
+  if (!name) {
+    res.status(400).json({ error: 'El nombre es obligatorio' });
+    return;
+  }
+
+  try {
+    // Verify product exists
+    const { data: existing, error: fetchError } = await insforge.database
+      .from('products')
+      .select('id, tenant_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    if (!existing) {
+      res.status(404).json({ error: 'Producto no encontrado' });
+      return;
+    }
+
+    if (existing.tenant_id !== tenantId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    // Update the product
+    const { data, error } = await insforge.database
+      .from('products')
+      .update({ name, description, price, stock, image_url })
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, product: data?.[0] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al actualizar producto' });
+  }
+});
+
+/**
+ * API Endpoint para eliminar un producto del catálogo
+ * DELETE /api/catalog/:id
+ * Query/Body: { tenantId }
+ */
+app.delete('/api/catalog/:id', async (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+  const tenantId = (req.query.tenantId as string) || req.body?.tenantId;
+
+  if (!tenantId) {
+    res.status(400).json({ error: 'Falta tenantId' });
+    return;
+  }
+
+  try {
+    // Verify product exists
+    const { data: existing, error: fetchError } = await insforge.database
+      .from('products')
+      .select('id, tenant_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    if (!existing) {
+      res.status(404).json({ error: 'Producto no encontrado' });
+      return;
+    }
+
+    if (existing.tenant_id !== tenantId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    // Delete the product
+    const { error: deleteError } = await insforge.database
+      .from('products')
+      .delete()
+      .eq('id', id)
+      .eq('tenant_id', tenantId);
+
+    if (deleteError) throw deleteError;
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al eliminar producto' });
+  }
+});
+
+/**
+ * API Endpoint para obtener métricas de consultas de un tenant
+ * GET /api/metrics/queries?tenantId=xxx
+ */
+app.get('/api/metrics/queries', async (req: express.Request, res: express.Response) => {
+  const tenantId = req.query.tenantId as string;
+  if (!tenantId) {
+    res.status(400).json({ error: 'Falta tenantId' });
+    return;
+  }
+
+  try {
+    const { count, error } = await insforge.database
+      .from('query_counts')
+      .select('id', { count: 'exact' })
+      .eq('tenant_id', tenantId);
+
+    if (error) throw error;
+    res.json({ count: count ?? 0 });
+  } catch (err: any) {
+    res.json({ count: 0 });
+  }
+});
+
+/**
+ * API Endpoint para generar una API key para un tenant
+ * POST /api/keys/generate
+ * Body: { tenantId }
+ */
+app.post('/api/keys/generate', async (req: express.Request, res: express.Response) => {
+  const { tenantId } = req.body;
+
+  if (!tenantId) {
+    res.status(400).json({ error: 'Falta tenantId' });
+    return;
+  }
+
+  try {
+    const generatedKey = crypto.randomBytes(32).toString('hex');
+
+    const { error } = await insforge.database
+      .from('api_keys')
+      .insert([{ tenant_id: tenantId, key_value: generatedKey }]);
+
+    if (error) throw error;
+    res.json({ success: true, key: generatedKey });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al generar API key' });
   }
 });
 
