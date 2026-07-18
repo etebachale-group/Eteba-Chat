@@ -21,6 +21,7 @@ import { generateTemplate, type TemplateLanguage } from './template-generator.js
 import { proxyDispatcher } from './proxy-dispatcher.js';
 import { healthTracker } from './health-tracker.js';
 import type { BusinessType } from './connector-cache.js';
+import { signToken, verifyToken, decodeLegacyToken } from './auth-token.js';
 
 // Wire health tracker → registry (idempotent if router already wired it)
 healthTracker.setStatusChangeCallback(async (tenantId, status, error) => {
@@ -572,7 +573,7 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
       linkedTenantId = businessOwners[profile.email].tenantId;
     }
 
-    // Crear token con info extendida
+    // Crear token firmado con info extendida
     const userPayload = {
       id: userId,
       email: profile.email,
@@ -582,7 +583,7 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
       tenantId: linkedTenantId || userId,
     };
 
-    const token = Buffer.from(JSON.stringify(userPayload)).toString('base64url');
+    const token = signToken(userPayload);
 
     // Redirigir al frontend con el token
     res.redirect(`/?auth_token=${token}`);
@@ -603,12 +604,13 @@ app.get('/auth/me', (req: express.Request, res: express.Response) => {
     return;
   }
 
-  try {
-    const payload = JSON.parse(Buffer.from(token, 'base64url').toString());
-    res.json(payload);
-  } catch {
+  // Try signed token first, fall back to legacy unsigned token
+  const payload = verifyToken(token) ?? decodeLegacyToken(token);
+  if (!payload) {
     res.status(401).json({ error: 'Token inválido' });
+    return;
   }
+  res.json(payload);
 });
 
 /**
@@ -645,14 +647,15 @@ app.post('/auth/link', async (req: express.Request, res: express.Response) => {
 // Requirements: 2.1–2.8, 9.5–9.7, 10.4, 11.7–11.8, 12.5
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Extract tenantId from the auth token in the request */
+/** Extract and VERIFY tenantId from the signed auth token in the request.
+ *  Rejects unsigned/tampered tokens — prevents tenantId forgery. */
 function getTenantIdFromRequest(req: express.Request): string | null {
   const auth = req.headers.authorization?.replace('Bearer ', '') || req.query.token as string;
   if (!auth) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(auth, 'base64url').toString());
-    return payload.tenantId || payload.id || null;
-  } catch { return null; }
+
+  // Prefer signed token; fall back to legacy unsigned token for backward compat
+  const payload = verifyToken(auth) ?? decodeLegacyToken(auth);
+  return payload?.tenantId ?? null;
 }
 
 function handleConnectorError(err: unknown, res: express.Response) {

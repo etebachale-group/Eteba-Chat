@@ -71,10 +71,18 @@ const Auth = (() => {
     }
   }
 
-  /** Decodificar token base64url y establecer usuario */
+  /** Decodificar token (firmado o legacy) y establecer usuario */
   function decodeAndSetUser(token) {
     try {
-      const payload = JSON.parse(atob(token.replace(/-/g, '+').replace(/_/g, '/')));
+      // New signed tokens: "base64url(payload).base64url(sig)"
+      // Legacy tokens: "base64url(json)" (no dot + sig)
+      let rawData = token;
+      const dotIdx = token.lastIndexOf('.');
+      if (dotIdx !== -1 && token.length - dotIdx - 1 === 43) {
+        // Looks like a signed token — extract just the payload part
+        rawData = token.slice(0, dotIdx);
+      }
+      const payload = JSON.parse(atob(rawData.replace(/-/g, '+').replace(/_/g, '/')));
       currentUser = {
         id: payload.id,
         email: payload.email,
