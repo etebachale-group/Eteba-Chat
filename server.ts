@@ -563,14 +563,16 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
     }
 
     // ─── Verificar si el email es owner de algún negocio/tenant ────────────
-    // Mapeo de emails de administradores a sus tenant IDs
-    const businessOwners: Record<string, { tenantId: string; role: string }> = {
-      'rotterinzakus@gmail.com': { tenantId: 'e22e9ee0-d29a-4172-88de-fb9ad14c9c1b', role: 'admin' },
+    // 'admin'  → administrador de la plataforma Eteba Chat (acceso total)
+    // 'tenant' → cliente/negocio que usa el servicio (acceso a su dashboard)
+    const platformRoles: Record<string, { role: string; tenantId: string | null }> = {
+      'etebachalegroup@gmail.com': { role: 'admin',  tenantId: null },
+      'rotterinzakus@gmail.com':   { role: 'tenant', tenantId: 'e22e9ee0-d29a-4172-88de-fb9ad14c9c1b' },
     };
 
-    if (businessOwners[profile.email]) {
-      userRole = businessOwners[profile.email].role;
-      linkedTenantId = businessOwners[profile.email].tenantId;
+    if (platformRoles[profile.email]) {
+      userRole = platformRoles[profile.email].role;
+      linkedTenantId = platformRoles[profile.email].tenantId;
     }
 
     // Crear token firmado con info extendida
