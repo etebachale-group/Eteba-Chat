@@ -107,33 +107,17 @@ const Auth = (() => {
   }
 
   function init() {
-    // Login button → open modal on login tab
+    // Login button → direct redirect to Google OAuth
     document.getElementById('btn-login')?.addEventListener('click', () => {
-      if (typeof RegistrationPage !== 'undefined') {
-        RegistrationPage.show();
-        // Switch to login panel after modal renders
-        requestAnimationFrame(() => {
-          document.getElementById('reg-switch-to-login')?.click();
-        });
-      } else {
-        signInWithGoogle();
-      }
+      signInWithGoogle();
     });
 
-    // Register / hero CTA → open registration modal
+    // Register / hero CTA → direct redirect to Google OAuth
     document.getElementById('btn-register')?.addEventListener('click', () => {
-      if (typeof RegistrationPage !== 'undefined') {
-        RegistrationPage.show();
-      } else {
-        signInWithGoogle();
-      }
+      signInWithGoogle();
     });
     document.getElementById('hero-cta')?.addEventListener('click', () => {
-      if (typeof RegistrationPage !== 'undefined') {
-        RegistrationPage.show();
-      } else {
-        signInWithGoogle();
-      }
+      signInWithGoogle();
     });
 
     // Avatar click → menú/logout
