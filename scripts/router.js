@@ -6,6 +6,11 @@ const AppRouter = (() => {
   let currentPage = 'landing';
 
   function navigate(pageName) {
+    // Proteger dashboard — redirigir a landing si no está logueado
+    if (pageName === 'dashboard' && !Auth.isLoggedIn()) {
+      pageName = 'landing';
+    }
+
     // Ocultar todas las páginas
     document.querySelectorAll('.page').forEach(page => {
       page.classList.remove('active');
@@ -32,13 +37,6 @@ const AppRouter = (() => {
       // Cargar datos específicos de la página
       if (pageName === 'dashboard' && typeof Dashboard !== 'undefined' && Auth.isLoggedIn()) {
         Dashboard.loadDashboardData();
-      }
-
-      // Proteger dashboard — redirigir a landing si no está logueado
-      if (pageName === 'dashboard' && !Auth.isLoggedIn()) {
-        pageName = 'landing';
-        target.classList.remove('active');
-        document.getElementById('page-landing').classList.add('active');
       }
 
       // Update URL hash
