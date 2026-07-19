@@ -31,10 +31,17 @@ import { validateUrl, validateEventTypes } from './webhook-validation.js';
 import { generateSigningSecret } from './webhook-signing.js';
 import { emitEvent, deliverToEndpoint, cancelPendingRetries, runDeliveryLogsCleanup } from './webhook-dispatcher.js';
 import type { WebhookEndpoint } from './webhook-types.js';
+import pg from 'pg';
 
 // Wire health tracker → registry (idempotent if router already wired it)
 healthTracker.setStatusChangeCallback(async (tenantId, status, error) => {
   await updateConnectorStatus(tenantId, status, error);
+});
+
+// Inicializar pool de base de datos nativa (para evitar bloqueos de RLS)
+const pgPool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
 const app = express();
@@ -759,29 +766,28 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
     // ─── Vinculación por EMAIL (identificador universal) ───────────────────
     // Primero buscar por email (vincula usuarios de Rotteri y Eteba Chat)
     let existingUser: any = null;
-    const { data: userByEmail } = await insforge.database
-      .from('users')
-      .select('id, email, google_id')
-      .eq('email', profile.email)
-      .maybeSingle();
+    const resByEmail = await pgPool.query(
+      'SELECT id, email, google_id FROM users WHERE email = $1',
+      [profile.email]
+    );
+    const userByEmail = resByEmail.rows[0];
 
     if (userByEmail) {
       existingUser = userByEmail;
       // Si no tenía google_id (fue creado desde otro sistema), vincularlo
       if (!userByEmail.google_id) {
-        await insforge.database
-          .from('users')
-          .update({ google_id: profile.id, avatar_url: profile.picture, updated_at: new Date().toISOString() })
-          .eq('id', userByEmail.id);
+        await pgPool.query(
+          'UPDATE users SET google_id = $1, avatar_url = $2, updated_at = $3 WHERE id = $4',
+          [profile.id, profile.picture, new Date().toISOString(), userByEmail.id]
+        );
       }
     } else {
       // Buscar por google_id como fallback
-      const { data: userByGoogle } = await insforge.database
-        .from('users')
-        .select('id, email, google_id')
-        .eq('google_id', profile.id)
-        .maybeSingle();
-      existingUser = userByGoogle;
+      const resByGoogle = await pgPool.query(
+        'SELECT id, email, google_id FROM users WHERE google_id = $1',
+        [profile.id]
+      );
+      existingUser = resByGoogle.rows[0];
     }
 
     let userId: string;
@@ -791,30 +797,26 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
 
     if (existingUser) {
       userId = existingUser.id;
-      await insforge.database
-        .from('users')
-        .update({ name: profile.name, email: profile.email, avatar_url: profile.picture, updated_at: new Date().toISOString() })
-        .eq('id', userId);
+      await pgPool.query(
+        'UPDATE users SET name = $1, email = $2, avatar_url = $3, updated_at = $4 WHERE id = $5',
+        [profile.name, profile.email, profile.picture, new Date().toISOString(), userId]
+      );
     } else {
       isNewUser = true;
 
       // Crear nuevo usuario
-      const { data: newUser, error } = await insforge.database
-        .from('users')
-        .insert([{
-          google_id: profile.id,
-          email: profile.email,
-          name: profile.name,
-          avatar_url: profile.picture,
-        }])
-        .select()
-        .single();
-
-      if (error || !newUser) {
-        res.status(500).send('Error al crear usuario');
+      try {
+        const resNew = await pgPool.query(
+          `INSERT INTO users (google_id, email, name, avatar_url, created_at, updated_at) 
+           VALUES ($1, $2, $3, $4, $5, $5) RETURNING id, email`,
+          [profile.id, profile.email, profile.name, profile.picture, new Date().toISOString()]
+        );
+        const newUser = resNew.rows[0];
+        userId = newUser.id;
+      } catch (insertErr: any) {
+        res.status(500).send('Error al crear usuario en base de datos');
         return;
       }
-      userId = newUser.id;
 
       // Crear company asociada al nuevo usuario
       await insforge.database
@@ -828,7 +830,7 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
       await serviceClient.database
         .from('subscriptions')
         .insert([{
-          tenant_id: newUser.id,
+          tenant_id: userId,
           plan_id: 'free',
           status: 'active',
           current_period_start: now.toISOString(),
@@ -837,7 +839,7 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
 
       // Enviar email de bienvenida (fire-and-forget)
       const { sendPlanEmail } = await import('./email-service.js');
-      sendPlanEmail(newUser.id, 'welcome', { name: profile.name }).catch(() => {});
+      sendPlanEmail(userId, 'welcome', { name: profile.name }).catch(() => {});
     }
 
     // ─── Verificar si el email es owner de algún negocio/tenant ────────────
@@ -1928,22 +1930,20 @@ app.post('/api/onboarding/step', async (req: express.Request, res: express.Respo
   }
 
   try {
-    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+    // Fetch current step_data via pgPool to bypass RLS
+    const resUser = await pgPool.query(
+      'SELECT onboarding_step_data FROM users WHERE id = $1',
+      [userId]
+    );
 
-    // Fetch current step_data
-    const { data: user } = await serviceClient.database
-      .from('users')
-      .select('onboarding_step_data')
-      .eq('id', userId)
-      .maybeSingle();
-
+    const user = resUser.rows[0];
     const currentStepData = (user?.onboarding_step_data as Record<string, any>) || {};
     currentStepData[String(step)] = data;
 
-    await serviceClient.database
-      .from('users')
-      .update({ onboarding_step: step, onboarding_step_data: currentStepData })
-      .eq('id', userId);
+    await pgPool.query(
+      'UPDATE users SET onboarding_step = $1, onboarding_step_data = $2 WHERE id = $3',
+      [step, JSON.stringify(currentStepData), userId]
+    );
 
     res.json({ success: true, step });
   } catch (err: any) {
@@ -1959,14 +1959,13 @@ app.get('/api/onboarding/status', async (req: express.Request, res: express.Resp
   if (!userId) { res.status(401).json({ error: 'unauthorized' }); return; }
 
   try {
-    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+    // Fetch onboarding status via pgPool to bypass RLS
+    const resUser = await pgPool.query(
+      'SELECT onboarding_completed, onboarding_step, onboarding_step_data FROM users WHERE id = $1',
+      [userId]
+    );
 
-    const { data: user } = await serviceClient.database
-      .from('users')
-      .select('onboarding_completed, onboarding_step, onboarding_step_data')
-      .eq('id', userId)
-      .maybeSingle();
-
+    const user = resUser.rows[0];
     res.json({
       completed: user?.onboarding_completed ?? false,
       currentStep: user?.onboarding_step ?? 0,
@@ -1986,39 +1985,41 @@ app.post('/api/onboarding/complete', async (req: express.Request, res: express.R
   if (!userId || !tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
 
   try {
-    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
     const now = new Date().toISOString();
 
-    await serviceClient.database
-      .from('users')
-      .update({ onboarding_completed: true, onboarding_completed_at: now })
-      .eq('id', userId);
+    // Update user onboarding state via pgPool to bypass RLS
+    await pgPool.query(
+      'UPDATE users SET onboarding_completed = true, onboarding_completed_at = $1 WHERE id = $2',
+      [now, userId]
+    );
 
     // Apply plan from step 3 if provided
     const { planId } = req.body;
     if (planId && planId !== 'free') {
       if (planId === 'trial') {
-        // Check if trial already used
-        const { data: sub } = await serviceClient.database
-          .from('subscriptions')
-          .select('trial_used_at')
-          .eq('tenant_id', tenantId)
-          .maybeSingle();
+        // Check if trial already used via pgPool
+        const resSub = await pgPool.query(
+          'SELECT trial_used_at FROM subscriptions WHERE tenant_id = $1',
+          [tenantId]
+        );
+        const sub = resSub.rows[0];
         if (!sub?.trial_used_at) {
           const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-          await serviceClient.database
-            .from('subscriptions')
-            .update({ plan_id: 'business', status: 'trialing', trial_ends_at: trialEnd, trial_used_at: now })
-            .eq('tenant_id', tenantId);
+          await pgPool.query(
+            `UPDATE subscriptions SET plan_id = 'business', status = 'trialing', 
+             trial_ends_at = $1, trial_used_at = $2 WHERE tenant_id = $3`,
+            [trialEnd, now, tenantId]
+          );
         }
       } else {
         const validPlans = ['starter', 'business', 'enterprise'];
         if (validPlans.includes(planId)) {
           const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-          await serviceClient.database
-            .from('subscriptions')
-            .update({ plan_id: planId, status: 'active', current_period_start: now, current_period_end: periodEnd })
-            .eq('tenant_id', tenantId);
+          await pgPool.query(
+            `UPDATE subscriptions SET plan_id = $1, status = 'active', 
+             current_period_start = $2, current_period_end = $3 WHERE tenant_id = $4`,
+            [planId, now, periodEnd, tenantId]
+          );
         }
       }
     }
