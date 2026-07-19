@@ -394,6 +394,10 @@
             <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"/></svg>
             Servicios
           </a>
+          <a href="#" class="sidebar__item" data-admin-tab="admin-logs">
+            <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+            Logs de Sistema
+          </a>
         </div>
       </aside>
 
@@ -686,6 +690,50 @@ Content-Type: application/json
           <div class="dash-tab__header"><h2>Servicios de la Plataforma</h2><p>Planes disponibles configurados en Eteba Chat</p></div>
           <div class="admin-plans-grid" id="admin-plans-grid">
             <p class="text-muted" style="padding:1rem;">Cargando planes...</p>
+          </div>
+        </div>
+
+        <!-- Tab Admin: Logs de Sistema -->
+        <div class="dash-tab hidden" id="tab-admin-logs">
+          <div class="dash-tab__header">
+            <div class="dash-header-row">
+              <div>
+                <h2>Logs del Sistema</h2>
+                <p>Auditoría en tiempo real y registro de errores de la plataforma</p>
+              </div>
+              <div class="dash-header-actions" style="display:flex;gap:8px;">
+                <select class="input input--sm" id="admin-log-filter-level" style="width:120px;">
+                  <option value="">Nivel: Todos</option>
+                  <option value="info">Info</option>
+                  <option value="warning">Warning</option>
+                  <option value="error">Error</option>
+                  <option value="debug">Debug</option>
+                </select>
+                <select class="input input--sm" id="admin-log-filter-component" style="width:140px;">
+                  <option value="">Componente: Todos</option>
+                  <option value="auth">Autenticación</option>
+                  <option value="catalog">Catálogo</option>
+                  <option value="connector">Conectores</option>
+                  <option value="ai_query">Consultas IA</option>
+                  <option value="billing">Facturación</option>
+                  <option value="webhook">Webhooks</option>
+                  <option value="system">Sistema</option>
+                </select>
+                <button class="btn btn--outline btn--sm" id="admin-log-btn-refresh">Refrescar</button>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div class="table-wrapper" id="admin-logs-table">
+              <p class="text-muted" style="padding:1.5rem;">Cargando logs...</p>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-top:1px solid var(--color-border);font-size:0.8rem;background:rgba(255,255,255,0.01);">
+              <span id="admin-logs-pagination-info" class="text-muted">Mostrando 0-0 de 0 logs</span>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn--outline btn--sm" id="admin-logs-btn-prev" disabled>Anterior</button>
+                <button class="btn btn--outline btn--sm" id="admin-logs-btn-next" disabled>Siguiente</button>
+              </div>
+            </div>
           </div>
         </div>
 

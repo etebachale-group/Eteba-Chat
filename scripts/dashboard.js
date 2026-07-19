@@ -129,6 +129,7 @@ const Dashboard = (() => {
         else if (tabName === 'admin-subscriptions') loadAdminSubscriptions();
         else if (tabName === 'admin-usage') loadAdminUsage();
         else if (tabName === 'admin-plans') loadAdminPlans();
+        else if (tabName === 'admin-logs') loadAdminLogs();
       });
     });
   }
@@ -149,6 +150,7 @@ const Dashboard = (() => {
     if (adminOverview) { adminOverview.classList.remove('hidden'); adminOverview.classList.add('active'); }
 
     initSidebarAdminTabs();
+    initAdminLogsEvents();
     loadAdminStats();
   }
 
@@ -169,7 +171,7 @@ const Dashboard = (() => {
       const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
       set('admin-total-companies', data.total_companies?.toLocaleString() ?? '—');
       set('admin-total-users',     data.total_users?.toLocaleString() ?? '—');
-      set('admin-mrr',             data.mrr_estimated > 0 ? `$${data.mrr_estimated.toLocaleString()}` : '$0');
+      set('admin-mrr',             data.mrr_estimated > 0 ? `${Number(data.mrr_estimated).toLocaleString('es-ES')} FCFA` : '0 FCFA');
       set('admin-total-queries',   data.total_queries_this_month?.toLocaleString() ?? '—');
       set('admin-new-companies',   data.new_companies_30d?.toLocaleString() ?? '—');
 
@@ -423,6 +425,170 @@ const Dashboard = (() => {
       await loadAdminTenants(document.getElementById('admin-tenant-search')?.value || '');
     } catch (err) {
       alert('Error al restablecer consumo: ' + err.message);
+    }
+  }
+
+  // ─── SYSTEM AUDIT LOGS FOR SUPER ADMIN ──────────────────────────────────────
+  let adminLogsPageState = { page: 1, limit: 30, total: 0 };
+
+  /** GET /api/admin/logs */
+  async function loadAdminLogs(page = 1) {
+    const tableEl = document.getElementById('admin-logs-table');
+    if (!tableEl) return;
+    
+    adminLogsPageState.page = page;
+    tableEl.innerHTML = '<p class="text-muted" style="padding:1.5rem;">Cargando logs...</p>';
+
+    const levelFilter = document.getElementById('admin-log-filter-level')?.value || '';
+    const componentFilter = document.getElementById('admin-log-filter-component')?.value || '';
+
+    try {
+      let url = `${API_BASE}/api/admin/logs?page=${page}&limit=${adminLogsPageState.limit}`;
+      if (levelFilter) url += `&level=${levelFilter}`;
+      if (componentFilter) url += `&component=${componentFilter}`;
+
+      const resp = await fetch(url, { headers: { Authorization: `Bearer ${getAdminToken()}` } });
+      if (!resp.ok) throw new Error(await resp.text());
+      const data = await resp.json();
+
+      adminLogsPageState.total = data.total || 0;
+      updateLogsPagination();
+
+      if (!data.logs?.length) {
+        tableEl.innerHTML = '<p class="text-muted" style="padding:1.5rem;">No se encontraron logs de sistema.</p>';
+        return;
+      }
+
+      const formatDate = d => d ? new Date(d).toLocaleString('es-ES') : '—';
+      
+      tableEl.innerHTML = `
+        <table class="admin-table">
+          <thead><tr>
+            <th style="width:160px;">Fecha / Hora</th>
+            <th style="width:90px;">Nivel</th>
+            <th style="width:110px;">Componente</th>
+            <th>Empresa</th>
+            <th>Mensaje</th>
+          </tr></thead>
+          <tbody id="admin-logs-tbody">
+          </tbody>
+        </table>`;
+
+      const tbody = document.getElementById('admin-logs-tbody');
+      data.logs.forEach(log => {
+        const row = document.createElement('tr');
+        row.className = 'log-row-expandable';
+        row.innerHTML = `
+          <td style="font-size:0.78rem;color:var(--color-text-muted);">${formatDate(log.created_at)}</td>
+          <td><span class="log-badge log-badge--${log.level}">${log.level}</span></td>
+          <td><strong style="text-transform: capitalize; font-size:0.8rem;color:#c4b5fd;">${log.component}</strong></td>
+          <td><span style="font-size:0.82rem;font-weight:600;">${log.company_name || 'Global'}</span></td>
+          <td style="font-size:0.82rem;"><span class="log-expand-icon">▶</span>${log.message}</td>
+        `;
+
+        row.addEventListener('click', () => {
+          toggleLogDetails(row, log);
+        });
+
+        tbody.appendChild(row);
+      });
+
+    } catch (err) {
+      tableEl.innerHTML = `<p class="text-muted" style="padding:1.5rem;">Error: ${err.message}</p>`;
+    }
+  }
+
+  /** Expandir/colapsar detalles de logs */
+  function toggleLogDetails(rowEl, log) {
+    const isExpanded = rowEl.classList.contains('log-row-expanded');
+    
+    if (isExpanded) {
+      rowEl.classList.remove('log-row-expanded');
+      const nextRow = rowEl.nextElementSibling;
+      if (nextRow && nextRow.classList.contains('log-details-row')) {
+        nextRow.remove();
+      }
+      return;
+    }
+
+    rowEl.classList.add('log-row-expanded');
+    const detailRow = document.createElement('tr');
+    detailRow.className = 'log-details-row';
+    
+    let detailsFormatted = 'Sin detalles adicionales.';
+    if (log.details) {
+      try {
+        const parsed = typeof log.details === 'string' ? JSON.parse(log.details) : log.details;
+        detailsFormatted = JSON.stringify(parsed, null, 2);
+      } catch (_) {
+        detailsFormatted = String(log.details);
+      }
+    }
+
+    detailRow.innerHTML = `
+      <td colspan="5" class="log-details-cell" style="padding:0;">
+        <div class="log-details-wrapper">
+          <div style="font-size:0.75rem;color:var(--color-text-muted);margin-bottom:6px;font-weight:600;">Contexto y detalles adicionales (JSON):</div>
+          <pre class="log-details-pre">${escapeHtml(detailsFormatted)}</pre>
+        </div>
+      </td>
+    `;
+    
+    rowEl.after(detailRow);
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
+  /** Actualizar botones de paginación del panel de logs */
+  function updateLogsPagination() {
+    const page = adminLogsPageState.page;
+    const limit = adminLogsPageState.limit;
+    const total = adminLogsPageState.total;
+
+    const btnPrev = document.getElementById('admin-logs-btn-prev');
+    const btnNext = document.getElementById('admin-logs-btn-next');
+    const infoSpan = document.getElementById('admin-logs-pagination-info');
+
+    if (!btnPrev || !btnNext || !infoSpan) return;
+
+    const start = total === 0 ? 0 : (page - 1) * limit + 1;
+    const end = Math.min(page * limit, total);
+    
+    infoSpan.textContent = `Mostrando ${start}-${end} de ${total} logs`;
+
+    btnPrev.disabled = page <= 1;
+    btnNext.disabled = end >= total;
+  }
+
+  /** Inicializar eventos para filtros y paginación de logs */
+  function initAdminLogsEvents() {
+    const refreshBtn = document.getElementById('admin-log-btn-refresh');
+    const filterLevel = document.getElementById('admin-log-filter-level');
+    const filterComponent = document.getElementById('admin-log-filter-component');
+    const btnPrev = document.getElementById('admin-logs-btn-prev');
+    const btnNext = document.getElementById('admin-logs-btn-next');
+
+    if (refreshBtn && !refreshBtn.dataset.initialized) {
+      refreshBtn.dataset.initialized = 'true';
+      refreshBtn.addEventListener('click', () => loadAdminLogs(adminLogsPageState.page));
+      
+      filterLevel?.addEventListener('change', () => loadAdminLogs(1));
+      filterComponent?.addEventListener('change', () => loadAdminLogs(1));
+
+      btnPrev?.addEventListener('click', () => {
+        if (adminLogsPageState.page > 1) {
+          loadAdminLogs(adminLogsPageState.page - 1);
+        }
+      });
+
+      btnNext?.addEventListener('click', () => {
+        const end = adminLogsPageState.page * adminLogsPageState.limit;
+        if (end < adminLogsPageState.total) {
+          loadAdminLogs(adminLogsPageState.page + 1);
+        }
+      });
     }
   }
 
@@ -1386,7 +1552,7 @@ ${sub.status !== 'cancelled' ? `<button class="btn btn--ghost btn--sm" style="co
     } catch (_) { showToast('Error de conexión', 'error'); }
   }
 
-  return { init, loadDashboardData, displayTenantInfo, showConfirmDialog, loadPlanBadge, loadUsageSection, showBillingTab, loadBillingPortal, _upgradePlan, _downgradePlan, _cancelSubscription, updateTenantSubscription, resetTenantUsage };
+  return { init, loadDashboardData, displayTenantInfo, showConfirmDialog, loadPlanBadge, loadUsageSection, showBillingTab, loadBillingPortal, _upgradePlan, _downgradePlan, _cancelSubscription, updateTenantSubscription, resetTenantUsage, loadAdminLogs };
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════════

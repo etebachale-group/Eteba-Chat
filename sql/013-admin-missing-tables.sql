@@ -112,3 +112,19 @@ FROM companies c
 WHERE NOT EXISTS (
     SELECT 1 FROM subscriptions s WHERE s.tenant_id = c.id
 );
+
+-- ── System Logs: platform_logs table for Super Admin audit/error tracking ──────
+CREATE TABLE IF NOT EXISTS platform_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    level TEXT NOT NULL,
+    component TEXT NOT NULL,
+    message TEXT NOT NULL,
+    details JSONB,
+    tenant_id UUID,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_logs_level ON platform_logs(level);
+CREATE INDEX IF NOT EXISTS idx_platform_logs_component ON platform_logs(component);
+CREATE INDEX IF NOT EXISTS idx_platform_logs_created ON platform_logs(created_at DESC);
+

@@ -1014,3 +1014,74 @@ pre::-webkit-scrollbar-thumb {
   font-weight: 600;
 }
 
+/* ── Platform Logs Styles ─────────────────────────────────────────── */
+.log-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+.log-badge--info {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.25);
+}
+.log-badge--warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.25);
+}
+.log-badge--error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+.log-badge--debug {
+  background: rgba(107, 114, 128, 0.15);
+  color: #9ca3af;
+  border-color: rgba(107, 114, 128, 0.25);
+}
+
+.log-row-expandable {
+  cursor: pointer;
+}
+.log-row-expandable:hover td {
+  background: rgba(255, 255, 255, 0.015) !important;
+}
+
+.log-expand-icon {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  margin-right: 6px;
+  color: var(--color-text-muted);
+}
+.log-row-expanded .log-expand-icon {
+  transform: rotate(90deg);
+}
+
+.log-details-cell {
+  background: rgba(0, 0, 0, 0.2) !important;
+  border-bottom: 1px solid var(--color-border);
+}
+.log-details-wrapper {
+  padding: 12px 24px;
+  animation: slideUp 0.15s ease-out;
+}
+.log-details-pre {
+  background: #090d16;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 12px;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #93c5fd;
+  overflow-x: auto;
+  max-height: 250px;
+  margin: 0;
+}
+
+

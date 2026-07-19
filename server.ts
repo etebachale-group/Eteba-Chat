@@ -840,6 +840,9 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
       // Enviar email de bienvenida (fire-and-forget)
       const { sendPlanEmail } = await import('./email-service.js');
       sendPlanEmail(userId, 'welcome', { name: profile.name }).catch(() => {});
+      
+      // Log de registro de nuevo usuario
+      logEvent('info', 'auth', `Nuevo usuario registrado vía Google: ${profile.email}`, { name: profile.name }, userId);
     }
 
     // ─── Verificar si el email es owner de algún negocio/tenant ────────────
@@ -867,6 +870,9 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
 
     const token = signToken(userPayload);
 
+    // Log de inicio de sesión exitoso
+    logEvent('info', 'auth', `Usuario inició sesión vía Google: ${profile.email}`, { role: userRole }, linkedTenantId || userId);
+
     // Redirigir al frontend con el token — nuevos usuarios van al onboarding
     if (isNewUser) {
       res.redirect(`/?auth_token=${token}&new_user=true`);
@@ -875,6 +881,7 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
     }
   } catch (err: any) {
     console.error('❌ Error en Google OAuth callback:', err);
+    logEvent('error', 'auth', `Fallo de autenticación vía Google: ${err.message}`, { stack: err.stack });
     res.status(500).send('Error interno de autenticación');
   }
 });
@@ -2054,6 +2061,81 @@ app.get('/api/usage', async (req: express.Request, res: express.Response) => {
 // Solo accesible por etebachalegroup@gmail.com (role = 'admin')
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Helper to log system events and errors into database
+ */
+async function logEvent(
+  level: 'info' | 'warning' | 'error' | 'debug',
+  component: 'auth' | 'catalog' | 'connector' | 'ai_query' | 'system' | 'billing' | 'webhook',
+  message: string,
+  details: any = null,
+  tenantId: string | null = null
+): Promise<void> {
+  try {
+    await pgPool.query(`
+      INSERT INTO platform_logs (level, component, message, details, tenant_id)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [level, component, message, details ? JSON.stringify(details) : null, tenantId]);
+  } catch (err: any) {
+    console.error('[Logger Error] Falló el registro de log en BD:', err.message);
+  }
+}
+
+/**
+ * GET /api/admin/logs — lista de logs de sistema de la plataforma
+ */
+app.get('/api/admin/logs', requireSuperAdmin, async (req: express.Request, res: express.Response) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = (page - 1) * limit;
+    const level = req.query.level as string || '';
+    const component = req.query.component as string || '';
+
+    const clauses: string[] = [];
+    const params: any[] = [limit, offset];
+
+    if (level) {
+      clauses.push(`level = $${params.length + 1}`);
+      params.push(level);
+    }
+    if (component) {
+      clauses.push(`component = $${params.length + 1}`);
+      params.push(component);
+    }
+
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    
+    const r = await pgPool.query(`
+      SELECT l.*, c.name as company_name
+      FROM platform_logs l
+      LEFT JOIN companies c ON c.id = l.tenant_id
+      ${whereClause}
+      ORDER BY l.created_at DESC
+      LIMIT $1 OFFSET $2
+    `, params);
+
+    const countParams = params.slice(2);
+    const countClauses = clauses.map((c, i) => c.replace(`$${i + 3}`, `$${i + 1}`));
+    const countWhere = countClauses.length > 0 ? `WHERE ${countClauses.join(' AND ')}` : '';
+    
+    const rCount = await pgPool.query(`
+      SELECT COUNT(*) as total FROM platform_logs
+      ${countWhere}
+    `, countParams);
+
+    res.json({
+      logs: r.rows,
+      total: parseInt(rCount.rows[0].total),
+      page,
+      limit
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /** Middleware que verifica que el token del request tenga role === 'admin' */
 function requireSuperAdmin(req: express.Request, res: express.Response, next: express.NextFunction): void {
   const auth = req.headers.authorization?.replace('Bearer ', '') || req.query.token as string;
@@ -2207,7 +2289,7 @@ app.get('/api/admin/tenant/:id', requireSuperAdmin, async (req: express.Request,
  * PATCH /api/admin/tenant/:id/plan — cambiar el plan de un tenant
  */
 app.patch('/api/admin/tenant/:id/plan', requireSuperAdmin, async (req: express.Request, res: express.Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const { plan_id, status } = req.body;
   const validPlans = ['free', 'starter', 'business', 'enterprise'];
   const validStatuses = ['active', 'cancelled', 'trialing', 'past_due'];
@@ -2231,6 +2313,7 @@ app.patch('/api/admin/tenant/:id/plan', requireSuperAdmin, async (req: express.R
       WHERE tenant_id = $6
     `, [plan_id, newStatus, now, periodEnd, now, id]);
 
+    logEvent('info', 'billing', `Suscripción de empresa modificada por Super Admin: plan: ${plan_id}, estado: ${newStatus}`, { plan_id, status: newStatus }, id);
     res.json({ success: true, tenant_id: id, plan_id, status: newStatus });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -2289,6 +2372,7 @@ app.patch('/api/admin/plan/:id', requireSuperAdmin, async (req: express.Request,
     params.push(id);
 
     await pgPool.query(query, params);
+    logEvent('warning', 'system', `Límites de plan '${id}' modificados por Super Admin`, { limits });
     res.json({ success: true, plan_id: id, limits });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -2299,7 +2383,7 @@ app.patch('/api/admin/plan/:id', requireSuperAdmin, async (req: express.Request,
  * POST /api/admin/tenant/:id/reset-usage — resetear consumo del mes actual para una empresa
  */
 app.post('/api/admin/tenant/:id/reset-usage', requireSuperAdmin, async (req: express.Request, res: express.Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   try {
     const now = new Date();
     const year = now.getFullYear();
@@ -2315,6 +2399,7 @@ app.post('/api/admin/tenant/:id/reset-usage', requireSuperAdmin, async (req: exp
         updated_at = NOW()
     `, [id, year, month]);
 
+    logEvent('warning', 'billing', `Consumo de IA restablecido a 0 para el mes actual por Super Admin`, null, id);
     res.json({ success: true, tenant_id: id, message: 'Consumo de consultas restablecido a 0 para el mes actual.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
