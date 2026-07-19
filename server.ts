@@ -942,6 +942,15 @@ function getTenantIdFromRequest(req: express.Request): string | null {
   return payload?.tenantId ?? null;
 }
 
+/** Extract and VERIFY userId from the signed auth token in the request. */
+function getUserIdFromRequest(req: express.Request): string | null {
+  const auth = req.headers.authorization?.replace('Bearer ', '') || req.query.token as string;
+  if (!auth) return null;
+
+  const payload = verifyToken(auth) ?? decodeLegacyToken(auth);
+  return payload?.id ?? null;
+}
+
 function handleConnectorError(err: unknown, res: express.Response) {
   const e = err as any;
   if (e?.status && typeof e.status === 'number') {
@@ -1909,8 +1918,8 @@ app.post('/api/subscription/cancel', async (req: express.Request, res: express.R
  * POST /api/onboarding/step — persist step data
  */
 app.post('/api/onboarding/step', async (req: express.Request, res: express.Response) => {
-  const tenantId = getTenantIdFromRequest(req);
-  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+  const userId = getUserIdFromRequest(req);
+  if (!userId) { res.status(401).json({ error: 'unauthorized' }); return; }
 
   const { step, data } = req.body;
   if (!step || step < 1 || step > 5 || !data) {
@@ -1925,7 +1934,7 @@ app.post('/api/onboarding/step', async (req: express.Request, res: express.Respo
     const { data: user } = await serviceClient.database
       .from('users')
       .select('onboarding_step_data')
-      .eq('id', tenantId)
+      .eq('id', userId)
       .maybeSingle();
 
     const currentStepData = (user?.onboarding_step_data as Record<string, any>) || {};
@@ -1934,7 +1943,7 @@ app.post('/api/onboarding/step', async (req: express.Request, res: express.Respo
     await serviceClient.database
       .from('users')
       .update({ onboarding_step: step, onboarding_step_data: currentStepData })
-      .eq('id', tenantId);
+      .eq('id', userId);
 
     res.json({ success: true, step });
   } catch (err: any) {
@@ -1946,8 +1955,8 @@ app.post('/api/onboarding/step', async (req: express.Request, res: express.Respo
  * GET /api/onboarding/status — return current wizard state
  */
 app.get('/api/onboarding/status', async (req: express.Request, res: express.Response) => {
-  const tenantId = getTenantIdFromRequest(req);
-  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+  const userId = getUserIdFromRequest(req);
+  if (!userId) { res.status(401).json({ error: 'unauthorized' }); return; }
 
   try {
     const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
@@ -1955,7 +1964,7 @@ app.get('/api/onboarding/status', async (req: express.Request, res: express.Resp
     const { data: user } = await serviceClient.database
       .from('users')
       .select('onboarding_completed, onboarding_step, onboarding_step_data')
-      .eq('id', tenantId)
+      .eq('id', userId)
       .maybeSingle();
 
     res.json({
@@ -1972,8 +1981,9 @@ app.get('/api/onboarding/status', async (req: express.Request, res: express.Resp
  * POST /api/onboarding/complete — finalize wizard
  */
 app.post('/api/onboarding/complete', async (req: express.Request, res: express.Response) => {
+  const userId = getUserIdFromRequest(req);
   const tenantId = getTenantIdFromRequest(req);
-  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+  if (!userId || !tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
 
   try {
     const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
@@ -1982,7 +1992,7 @@ app.post('/api/onboarding/complete', async (req: express.Request, res: express.R
     await serviceClient.database
       .from('users')
       .update({ onboarding_completed: true, onboarding_completed_at: now })
-      .eq('id', tenantId);
+      .eq('id', userId);
 
     // Apply plan from step 3 if provided
     const { planId } = req.body;
