@@ -264,6 +264,82 @@ const Dashboard = (() => {
     }
   }
 
+  /** GET /api/admin/subscriptions */
+  async function loadAdminSubscriptions() {
+    const tableEl = document.getElementById('admin-subscriptions-table');
+    if (!tableEl) return;
+    tableEl.innerHTML = '<p class="text-muted" style="padding:1.5rem;">Cargando...</p>';
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/admin/subscriptions`, {
+        headers: { Authorization: `Bearer ${getAdminToken()}` }
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const data = await resp.json();
+
+      if (!data.subscriptions?.length) {
+        tableEl.innerHTML = '<p class="text-muted" style="padding:1.5rem;">No hay suscripciones.</p>';
+        return;
+      }
+
+      const formatDate = d => d ? new Date(d).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+      tableEl.innerHTML = `
+        <table class="admin-table">
+          <thead><tr>
+            <th>Empresa</th><th>Owner</th><th>Plan</th><th>Estado</th><th>Inicio</th><th>Vence</th><th>Actualizado</th>
+          </tr></thead>
+          <tbody>
+            ${data.subscriptions.map(s => `
+              <tr>
+                <td><strong>${s.company_name || '—'}</strong></td>
+                <td style="font-size:0.8rem;color:var(--color-text-muted);">${s.owner_email || '—'}</td>
+                <td><span class="plan-badge plan-badge--${s.plan_id || 'free'}">${s.plan_id || '—'}</span></td>
+                <td><span class="plan-badge plan-badge--${s.status === 'active' ? 'business' : s.status === 'trialing' ? 'trialing' : 'free'}">${s.status || '—'}</span></td>
+                <td style="font-size:0.8rem;">${formatDate(s.current_period_start)}</td>
+                <td style="font-size:0.8rem;">${formatDate(s.current_period_end)}</td>
+                <td style="font-size:0.8rem;color:var(--color-text-muted);">${formatDate(s.updated_at)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    } catch (err) {
+      tableEl.innerHTML = `<p class="text-muted" style="padding:1.5rem;">Error: ${err.message}</p>';
+    }
+  }
+
+  /** GET /api/admin/tenants — Uso & IA */
+  async function loadAdminUsage() {
+    const tableEl = document.getElementById('admin-usage-table');
+    if (!tableEl) return;
+    tableEl.innerHTML = '<p class="text-muted" style="padding:1.5rem;">Cargando...</p>';
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/admin/tenants?limit=100`, {
+        headers: { Authorization: `Bearer ${getAdminToken()}` }
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const data = await resp.json();
+
+      const sorted = (data.tenants || []).sort((a, b) => b.queries_this_month - a.queries_this_month);
+      tableEl.innerHTML = `
+        <table class="admin-table">
+          <thead><tr><th>Empresa</th><th>Owner</th><th>Plan</th><th>Consultas este mes</th></tr></thead>
+          <tbody>
+            ${sorted.map(t => `
+              <tr>
+                <td><strong>${t.company_name || '—'}</strong></td>
+                <td style="font-size:0.8rem;color:var(--color-text-muted);">${t.owner_email || '—'}</td>
+                <td><span class="plan-badge plan-badge--${t.plan_id || 'free'}">${t.plan_id || '—'}</span></td>
+                <td><strong style="color:#c4b5fd;">${Number(t.queries_this_month).toLocaleString()}</strong></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    } catch (err) {
+      tableEl.innerHTML = `<p class="text-muted" style="padding:1.5rem;">Error: ${err.message}</p>`;
+    }
+  }
+
   /** GET /api/admin/plans */
   async function loadAdminPlans() {
     const gridEl = document.getElementById('admin-plans-grid');
