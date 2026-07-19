@@ -10,10 +10,6 @@ DROP POLICY IF EXISTS users_self_read ON public.users;
 CREATE POLICY users_self_read ON public.users 
     FOR SELECT USING (id = (SELECT auth.uid()));
 
-DROP POLICY IF EXISTS users_anon_read ON public.users;
-CREATE POLICY users_anon_read ON public.users 
-    FOR SELECT USING (true);
-
 DROP POLICY IF EXISTS users_self_update ON public.users;
 CREATE POLICY users_self_update ON public.users 
     FOR UPDATE USING (id = (SELECT auth.uid())) 
