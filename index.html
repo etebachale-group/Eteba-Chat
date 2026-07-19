@@ -333,7 +333,7 @@
     <div class="dashboard">
       <!-- Sidebar -->
       <aside class="sidebar">
-        <div class="sidebar__menu">
+        <div class="sidebar__menu" id="sidebar-tenant-menu">
           <a href="#" class="sidebar__item sidebar__item--active" data-tab="overview">
             <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
             Overview
@@ -365,6 +365,34 @@
           <a href="#" class="sidebar__item" data-tab="billing">
             <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/></svg>
             Planes & Facturación
+          </a>
+        </div>
+
+        <!-- Menú Super Admin (oculto por defecto, se activa con JS) -->
+        <div class="sidebar__menu hidden" id="sidebar-admin-menu">
+          <div class="sidebar__badge">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+            Super Admin
+          </div>
+          <a href="#" class="sidebar__item sidebar__item--active" data-admin-tab="admin-overview">
+            <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+            Plataforma
+          </a>
+          <a href="#" class="sidebar__item" data-admin-tab="admin-tenants">
+            <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z"/></svg>
+            Empresas
+          </a>
+          <a href="#" class="sidebar__item" data-admin-tab="admin-subscriptions">
+            <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/></svg>
+            Suscripciones
+          </a>
+          <a href="#" class="sidebar__item" data-admin-tab="admin-usage">
+            <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6"/></svg>
+            Uso &amp; IA
+          </a>
+          <a href="#" class="sidebar__item" data-admin-tab="admin-plans">
+            <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"/></svg>
+            Servicios
           </a>
         </div>
       </aside>
@@ -591,6 +619,73 @@ Content-Type: application/json
               <p>Asistente en Telegram</p>
               <button class="btn btn--outline btn--sm">Próximamente</button>
             </div>
+          </div>
+        </div>
+
+        <!-- ─── SUPER ADMIN TABS ─────────────────────────────────────────── -->
+
+        <!-- Tab Admin: Plataforma (Overview Global) -->
+        <div class="dash-tab hidden" id="tab-admin-overview">
+          <div class="dash-tab__header">
+            <div class="dash-header-row">
+              <div>
+                <h2>Control de la Plataforma</h2>
+                <p>Estadísticas globales y rendimiento de Eteba Chat</p>
+              </div>
+              <div class="dash-header-actions">
+                <span class="admin-badge"><svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Super Admin</span>
+              </div>
+            </div>
+          </div>
+          <div class="metrics__grid admin-metrics" id="admin-stats-grid">
+            <div class="metric-card admin-metric"><div class="metric-card__value" id="admin-total-companies">—</div><div class="metric-card__label">Empresas registradas</div></div>
+            <div class="metric-card admin-metric"><div class="metric-card__value" id="admin-total-users">—</div><div class="metric-card__label">Usuarios totales</div></div>
+            <div class="metric-card admin-metric"><div class="metric-card__value" id="admin-mrr">—</div><div class="metric-card__label">MRR estimado (USD)</div></div>
+            <div class="metric-card admin-metric"><div class="metric-card__value" id="admin-total-queries">—</div><div class="metric-card__label">Consultas IA este mes</div></div>
+            <div class="metric-card admin-metric"><div class="metric-card__value" id="admin-new-companies">—</div><div class="metric-card__label">Nuevas empresas (30d)</div></div>
+          </div>
+          <div class="card" style="margin-top:1.5rem;padding:1.25rem;">
+            <h3 class="card__title">Distribución de Planes</h3>
+            <div id="admin-plan-breakdown" style="margin-top:0.75rem;"></div>
+          </div>
+        </div>
+
+        <!-- Tab Admin: Empresas -->
+        <div class="dash-tab hidden" id="tab-admin-tenants">
+          <div class="dash-tab__header">
+            <div class="dash-header-row">
+              <div><h2>Empresas en la Plataforma</h2><p>Gestiona todos los negocios registrados</p></div>
+              <div class="dash-header-actions">
+                <input type="text" class="input input--sm" id="admin-tenant-search" placeholder="Buscar empresa o email..." style="width:240px;">
+              </div>
+            </div>
+          </div>
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div class="table-wrapper" id="admin-tenants-table"><p class="text-muted" style="padding:1.5rem;">Cargando empresas...</p></div>
+          </div>
+        </div>
+
+        <!-- Tab Admin: Suscripciones -->
+        <div class="dash-tab hidden" id="tab-admin-subscriptions">
+          <div class="dash-tab__header"><h2>Suscripciones</h2><p>Estado y gestión de todas las suscripciones activas</p></div>
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div class="table-wrapper" id="admin-subscriptions-table"><p class="text-muted" style="padding:1.5rem;">Cargando suscripciones...</p></div>
+          </div>
+        </div>
+
+        <!-- Tab Admin: Uso & IA -->
+        <div class="dash-tab hidden" id="tab-admin-usage">
+          <div class="dash-tab__header"><h2>Uso &amp; Consumo de IA</h2><p>Estadísticas de uso por empresa este mes</p></div>
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div class="table-wrapper" id="admin-usage-table"><p class="text-muted" style="padding:1.5rem;">Cargando estadísticas...</p></div>
+          </div>
+        </div>
+
+        <!-- Tab Admin: Servicios / Planes -->
+        <div class="dash-tab hidden" id="tab-admin-plans">
+          <div class="dash-tab__header"><h2>Servicios de la Plataforma</h2><p>Planes disponibles configurados en Eteba Chat</p></div>
+          <div class="admin-plans-grid" id="admin-plans-grid">
+            <p class="text-muted" style="padding:1rem;">Cargando planes...</p>
           </div>
         </div>
 

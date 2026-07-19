@@ -2049,7 +2049,239 @@ app.get('/api/usage', async (req: express.Request, res: express.Response) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SUPER ADMIN API (/api/admin/*)
+// Solo accesible por etebachalegroup@gmail.com (role = 'admin')
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Middleware que verifica que el token del request tenga role === 'admin' */
+function requireSuperAdmin(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  const auth = req.headers.authorization?.replace('Bearer ', '') || req.query.token as string;
+  if (!auth) { res.status(401).json({ error: 'unauthorized' }); return; }
+  const payload = verifyToken(auth) ?? decodeLegacyToken(auth);
+  if (!payload || payload.role !== 'admin') {
+    res.status(403).json({ error: 'forbidden', message: 'Solo el Super Admin puede acceder a este recurso.' });
+    return;
+  }
+  next();
+}
+
+/**
+ * GET /api/admin/stats — estadísticas globales de la plataforma
+ */
+app.get('/api/admin/stats', requireSuperAdmin, async (_req: express.Request, res: express.Response) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+
+    // Total de empresas/tenants
+    const rCompanies = await pgPool.query(`SELECT COUNT(*) as total FROM companies`);
+
+    // Usuarios totales registrados
+    const rUsers = await pgPool.query(`SELECT COUNT(*) as total FROM users`);
+
+    // Suscripciones activas por plan
+    const rPlans = await pgPool.query(`
+      SELECT plan_id, status, COUNT(*) as count
+      FROM subscriptions
+      GROUP BY plan_id, status
+      ORDER BY count DESC
+    `);
+
+    // Empresas nuevas en los últimos 30 días
+    const rNew = await pgPool.query(`
+      SELECT COUNT(*) as total FROM companies
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+    `);
+
+    // Uso total de IA (consultas) del mes actual
+    const rUsage = await pgPool.query(`
+      SELECT COALESCE(SUM(query_count), 0) as total_queries
+      FROM usage_monthly
+      WHERE year_month = TO_CHAR(NOW(), 'YYYY-MM')
+    `);
+
+    // Calcular MRR estimado basado en planes
+    const planPrices: Record<string, number> = {
+      free: 0, starter: 29, business: 79, enterprise: 299, trial: 0
+    };
+    let mrr = 0;
+    for (const row of rPlans.rows) {
+      if (row.status === 'active') {
+        mrr += (planPrices[row.plan_id] || 0) * parseInt(row.count);
+      }
+    }
+
+    res.json({
+      total_companies: parseInt(rCompanies.rows[0].total),
+      total_users: parseInt(rUsers.rows[0].total),
+      new_companies_30d: parseInt(rNew.rows[0].total),
+      total_queries_this_month: parseInt(rUsage.rows[0].total_queries),
+      mrr_estimated: mrr,
+      plan_breakdown: rPlans.rows,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/tenants — lista de todos los tenants con su suscripción
+ */
+app.get('/api/admin/tenants', requireSuperAdmin, async (req: express.Request, res: express.Response) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = (page - 1) * limit;
+    const search = req.query.search as string || '';
+
+    const searchClause = search ? `AND (c.name ILIKE $3 OR u.email ILIKE $3)` : '';
+    const params: any[] = [limit, offset];
+    if (search) params.push(`%${search}%`);
+
+    const r = await pgPool.query(`
+      SELECT 
+        c.id as tenant_id,
+        c.name as company_name,
+        c.created_at,
+        u.email as owner_email,
+        u.name as owner_name,
+        u.avatar_url,
+        s.plan_id,
+        s.status as subscription_status,
+        s.current_period_end,
+        s.trial_ends_at,
+        COALESCE(um.query_count, 0) as queries_this_month
+      FROM companies c
+      LEFT JOIN users u ON u.id = c.owner_id
+      LEFT JOIN subscriptions s ON s.tenant_id = c.id
+      LEFT JOIN usage_monthly um ON um.tenant_id = c.id AND um.year_month = TO_CHAR(NOW(), 'YYYY-MM')
+      WHERE 1=1 ${searchClause}
+      ORDER BY c.created_at DESC
+      LIMIT $1 OFFSET $2
+    `, params);
+
+    const rCount = await pgPool.query(
+      `SELECT COUNT(*) as total FROM companies c LEFT JOIN users u ON u.id = c.owner_id WHERE 1=1 ${search ? 'AND (c.name ILIKE $1 OR u.email ILIKE $1)' : ''}`,
+      search ? [`%${search}%`] : []
+    );
+
+    res.json({
+      tenants: r.rows,
+      total: parseInt(rCount.rows[0].total),
+      page,
+      limit,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/tenant/:id — detalle de un tenant específico
+ */
+app.get('/api/admin/tenant/:id', requireSuperAdmin, async (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+  try {
+    res.set('Cache-Control', 'no-store');
+    const r = await pgPool.query(`
+      SELECT 
+        c.id as tenant_id, c.name as company_name, c.created_at,
+        u.email as owner_email, u.name as owner_name, u.avatar_url,
+        s.plan_id, s.status, s.current_period_start, s.current_period_end, s.trial_ends_at,
+        COALESCE(um.query_count, 0) as queries_this_month,
+        COALESCE(um.ingest_count, 0) as ingests_this_month
+      FROM companies c
+      LEFT JOIN users u ON u.id = c.owner_id
+      LEFT JOIN subscriptions s ON s.tenant_id = c.id
+      LEFT JOIN usage_monthly um ON um.tenant_id = c.id AND um.year_month = TO_CHAR(NOW(), 'YYYY-MM')
+      WHERE c.id = $1
+    `, [id]);
+
+    if (!r.rows[0]) { res.status(404).json({ error: 'Tenant no encontrado' }); return; }
+    res.json({ tenant: r.rows[0] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/admin/tenant/:id/plan — cambiar el plan de un tenant
+ */
+app.patch('/api/admin/tenant/:id/plan', requireSuperAdmin, async (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+  const { plan_id, status } = req.body;
+  const validPlans = ['free', 'starter', 'business', 'enterprise'];
+  const validStatuses = ['active', 'cancelled', 'trialing', 'past_due'];
+
+  if (!plan_id || !validPlans.includes(plan_id)) {
+    res.status(400).json({ error: 'plan_id inválido', valid: validPlans }); return;
+  }
+
+  try {
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const newStatus = validStatuses.includes(status) ? status : 'active';
+
+    await pgPool.query(`
+      UPDATE subscriptions SET
+        plan_id = $1,
+        status = $2,
+        current_period_start = $3,
+        current_period_end = $4,
+        updated_at = $5
+      WHERE tenant_id = $6
+    `, [plan_id, newStatus, now, periodEnd, now, id]);
+
+    res.json({ success: true, tenant_id: id, plan_id, status: newStatus });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/subscriptions — resumen de todas las suscripciones
+ */
+app.get('/api/admin/subscriptions', requireSuperAdmin, async (_req: express.Request, res: express.Response) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const r = await pgPool.query(`
+      SELECT
+        s.tenant_id,
+        c.name as company_name,
+        u.email as owner_email,
+        s.plan_id,
+        s.status,
+        s.current_period_start,
+        s.current_period_end,
+        s.trial_ends_at,
+        s.updated_at
+      FROM subscriptions s
+      LEFT JOIN companies c ON c.id = s.tenant_id
+      LEFT JOIN users u ON u.id = c.owner_id
+      ORDER BY s.updated_at DESC
+    `);
+    res.json({ subscriptions: r.rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/plans — lista de planes configurados
+ */
+app.get('/api/admin/plans', requireSuperAdmin, async (_req: express.Request, res: express.Response) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const r = await pgPool.query(`SELECT * FROM plans ORDER BY monthly_query_limit ASC NULLS LAST`);
+    res.json({ plans: r.rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Levantar el servidor
+
 app.listen(PORT, () => {
   console.log(`\n======================================================`);
   console.log(`🚀 Servidor Antigravity RAG levantado con éxito.`);
