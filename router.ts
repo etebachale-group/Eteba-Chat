@@ -706,7 +706,8 @@ function classifyIntentHeuristically(query: string, history: ConversationMessage
     'ropa', 'camisa', 'camisas', 'pantalon', 'pantalones', 'vestido', 'vestidos',
     'bolso', 'bolsos', 'accesorio', 'accesorios', 'joya', 'joyas',
     'perfume', 'perfumes', 'crema', 'cremas', 'maquillaje', 'sandalia', 'sandalias',
-    'reloj', 'relojes', 'gafas', 'lentes', 'moda', 'calzado',
+    'reloj', 'relojes', 'gafas', 'lentes', 'moda', 'calzado', 'calzados',
+    'zapatilla', 'zapatillas', 'zapato', 'zapatos', 'sneaker', 'sneakers', 'tenis', 'baskets',
     'categoria', 'categorias', 'categoría', 'categorías'
   ];
   if (catalogKeywords.some(kw => q.includes(kw))) {
