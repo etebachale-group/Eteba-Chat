@@ -2097,7 +2097,7 @@ app.get('/api/admin/stats', requireSuperAdmin, async (_req: express.Request, res
     const rUsage = await pgPool.query(`
       SELECT COALESCE(SUM(query_count), 0) as total_queries
       FROM usage_monthly
-      WHERE year_month = TO_CHAR(NOW(), 'YYYY-MM')
+      WHERE period_year = EXTRACT(YEAR FROM NOW())::INTEGER AND period_month = EXTRACT(MONTH FROM NOW())::INTEGER
     `);
 
     // Calcular MRR estimado basado en planes
@@ -2155,7 +2155,7 @@ app.get('/api/admin/tenants', requireSuperAdmin, async (req: express.Request, re
       FROM companies c
       LEFT JOIN users u ON u.id = c.owner_id
       LEFT JOIN subscriptions s ON s.tenant_id = c.id
-      LEFT JOIN usage_monthly um ON um.tenant_id = c.id AND um.year_month = TO_CHAR(NOW(), 'YYYY-MM')
+      LEFT JOIN usage_monthly um ON um.tenant_id = c.id AND um.period_year = EXTRACT(YEAR FROM NOW())::INTEGER AND um.period_month = EXTRACT(MONTH FROM NOW())::INTEGER
       WHERE 1=1 ${searchClause}
       ORDER BY c.created_at DESC
       LIMIT $1 OFFSET $2
@@ -2194,7 +2194,7 @@ app.get('/api/admin/tenant/:id', requireSuperAdmin, async (req: express.Request,
       FROM companies c
       LEFT JOIN users u ON u.id = c.owner_id
       LEFT JOIN subscriptions s ON s.tenant_id = c.id
-      LEFT JOIN usage_monthly um ON um.tenant_id = c.id AND um.year_month = TO_CHAR(NOW(), 'YYYY-MM')
+      LEFT JOIN usage_monthly um ON um.tenant_id = c.id AND um.period_year = EXTRACT(YEAR FROM NOW())::INTEGER AND um.period_month = EXTRACT(MONTH FROM NOW())::INTEGER
       WHERE c.id = $1
     `, [id]);
 
