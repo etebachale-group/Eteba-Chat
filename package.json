@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "dev": "tsc && node dist/server.js",
     "ingest": "tsc && node dist/test-ingest.js",
-    "query": "tsc && node dist/test-router.js"
+    "query": "tsc && node dist/test-router.js",
+    "test": "ts-node tests/run-all.ts"
   },
   "keywords": [
     "rag",
@@ -23,6 +24,7 @@
   "dependencies": {
     "@insforge/sdk": "^1.4.4",
     "@xenova/transformers": "^2.17.2",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
@@ -31,10 +33,12 @@
     "pg": "^8.22.0"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^20.14.9",
     "@types/pg": "^8.20.0",
+    "fast-check": "^3.23.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.2"
   }

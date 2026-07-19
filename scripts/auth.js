@@ -107,10 +107,34 @@ const Auth = (() => {
   }
 
   function init() {
-    // Botones de login
-    document.getElementById('btn-login')?.addEventListener('click', signInWithGoogle);
-    document.getElementById('btn-register')?.addEventListener('click', signInWithGoogle);
-    document.getElementById('hero-cta')?.addEventListener('click', signInWithGoogle);
+    // Login button → open modal on login tab
+    document.getElementById('btn-login')?.addEventListener('click', () => {
+      if (typeof RegistrationPage !== 'undefined') {
+        RegistrationPage.show();
+        // Switch to login panel after modal renders
+        requestAnimationFrame(() => {
+          document.getElementById('reg-switch-to-login')?.click();
+        });
+      } else {
+        signInWithGoogle();
+      }
+    });
+
+    // Register / hero CTA → open registration modal
+    document.getElementById('btn-register')?.addEventListener('click', () => {
+      if (typeof RegistrationPage !== 'undefined') {
+        RegistrationPage.show();
+      } else {
+        signInWithGoogle();
+      }
+    });
+    document.getElementById('hero-cta')?.addEventListener('click', () => {
+      if (typeof RegistrationPage !== 'undefined') {
+        RegistrationPage.show();
+      } else {
+        signInWithGoogle();
+      }
+    });
 
     // Avatar click → menú/logout
     document.getElementById('user-avatar')?.addEventListener('click', () => {

@@ -37,6 +37,8 @@ const Dashboard = (() => {
     loadCatalog(tenantId);
     displayTenantInfo();
     initQuickActions();
+    loadPlanBadge(tenantId);
+    loadUsageSection(tenantId);
   }
 
   /** Quick action buttons */
@@ -83,6 +85,8 @@ const Dashboard = (() => {
             loadRecentOrders(tenantId);
           } else if (tabName === 'overview') {
             loadQueryMetrics(tenantId);
+          } else if (tabName === 'billing') {
+            loadBillingPortal();
           }
         }
       });
@@ -765,7 +769,264 @@ const Dashboard = (() => {
     return parseFloat(price || 0).toLocaleString('es-ES');
   }
 
-  return { init, loadDashboardData, displayTenantInfo, showConfirmDialog };
+  // ── Plan Badge & Usage ──────────────────────────────────────────────────────
+
+  /** Load Plan Badge in dashboard header and trial countdown (Req 8.1, 4.4, 8.6) */
+  async function loadPlanBadge(tenantId) {
+    try {
+      const token = Auth.getAccessToken();
+      const resp = await fetch(`${API_BASE}/api/subscription`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const plan = data.plan || {};
+      const sub = data.subscription || {};
+      const planId = plan.id || sub.plan_id || 'free';
+
+      // Inject badge — prefer the dedicated container in the header, fall back to
+      // prepending into .dash-header-actions for resilience
+      let badge = document.getElementById('plan-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.id = 'plan-badge';
+        const container = document.getElementById('plan-badge-container');
+        if (container) {
+          container.appendChild(badge);
+        } else {
+          const headerActions = document.querySelector('.dash-header-actions');
+          if (headerActions) headerActions.prepend(badge);
+        }
+      }
+      const colorMap = {
+        free:       'plan-badge--free',
+        starter:    'plan-badge--starter',
+        business:   'plan-badge--business',
+        enterprise: 'plan-badge--enterprise'
+      };
+      badge.className = `plan-badge ${colorMap[planId] || 'plan-badge--free'}`;
+      badge.textContent = (plan.name || planId).toUpperCase();
+
+      // Trial countdown banner (Req 4.4)
+      if (sub.status === 'trialing' && data.daysUntilTrialEnd !== undefined) {
+        _showTrialBanner(data.daysUntilTrialEnd);
+      } else {
+        document.getElementById('trial-banner')?.remove();
+      }
+
+      // Onboarding completion prompt (Req 8.6)
+      // The API may return onboarding_completed at root level or nested under `user`
+      const onboardingDone = data.onboarding_completed ??
+                             data.user?.onboarding_completed ??
+                             true; // default: assume done if not provided
+      if (onboardingDone === false) {
+        _showSetupBanner();
+      } else {
+        document.getElementById('onboarding-banner')?.remove();
+      }
+    } catch (_) {}
+  }
+
+  /** Render the trial countdown banner */
+  function _showTrialBanner(daysLeft) {
+    let el = document.getElementById('trial-banner');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'trial-banner';
+      el.className = 'trial-countdown-banner';
+      const overviewHeader = document.querySelector('#tab-overview .dash-tab__header');
+      if (overviewHeader) overviewHeader.insertAdjacentElement('afterend', el);
+    }
+    el.innerHTML = `🎉 <strong>Prueba Business activa</strong> — te quedan <strong>${daysLeft} días</strong>. <a href="#" onclick="Dashboard.showBillingTab();return false;" class="trial-countdown-banner__link">Ver planes →</a>`;
+  }
+
+  /** Render the "Complete Setup" banner */
+  function _showSetupBanner() {
+    let el = document.getElementById('onboarding-banner');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'onboarding-banner';
+      el.className = 'complete-setup-banner';
+      const overviewHeader = document.querySelector('#tab-overview .dash-tab__header');
+      if (overviewHeader) overviewHeader.insertAdjacentElement('afterend', el);
+    }
+    el.innerHTML = `
+      <div class="complete-setup-banner__text">
+        <strong>⚙️ Tu configuración está incompleta.</strong>
+        Termina de configurar tu cuenta para sacar el máximo provecho de Eteba Chat.
+      </div>
+      <button class="complete-setup-banner__btn btn btn--primary btn--sm" id="btn-complete-setup">
+        Completar Configuración
+      </button>
+    `;
+    document.getElementById('btn-complete-setup')?.addEventListener('click', () => {
+      if (typeof OnboardingWizard !== 'undefined') OnboardingWizard.show();
+    });
+  }
+
+  /** Load Usage Section with progress bars (Req 8.2, 8.3, 8.4) */
+  async function loadUsageSection(tenantId) {
+    const token = Auth.getAccessToken();
+    try {
+      const resp = await fetch(`${API_BASE}/api/usage`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!resp.ok) return;
+      const s = await resp.json();
+      const container = document.getElementById('usage-section');
+      if (!container) return;
+
+      const pct = s.percentages || {};
+      const lim = s.limits || {};
+      const resources = [
+        { key: 'queries',    label: 'Consultas IA',  count: s.query_count,     limit: lim.monthly_query_limit, pctVal: pct.queries },
+        { key: 'products',   label: 'Productos',     count: s.product_count,   limit: lim.product_limit,       pctVal: pct.products },
+        { key: 'connectors', label: 'Conectores',    count: s.connector_count, limit: lim.connector_limit,     pctVal: pct.connectors },
+        { key: 'api_keys',   label: 'API Keys',      count: s.api_key_count,   limit: lim.api_key_limit,       pctVal: pct.api_keys },
+      ];
+
+      container.innerHTML = `<h3 style="font-size:1rem;font-weight:600;margin:0 0 1rem;color:#d1d5db;">Uso del Plan — ${new Date().toLocaleString('es-ES',{month:'long',year:'numeric'})}</h3>` +
+        resources.map(r => {
+          const p = Math.min(r.pctVal || 0, 100);
+          const cls = p >= 95 ? 'usage--critical' : p >= 80 ? 'usage--warning' : 'usage--normal';
+          const limitLabel = r.limit === null ? '∞' : r.limit;
+          return `
+<div style="margin-bottom:1rem;">
+  <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#9ca3af;margin-bottom:0.3rem;">
+    <span>${r.label}</span><span>${r.count} / ${limitLabel}</span>
+  </div>
+  <div style="background:#374151;border-radius:9999px;height:6px;">
+    <div class="${cls}" style="height:6px;border-radius:9999px;transition:width 0.4s;width:${p}%;"></div>
+  </div>
+</div>`;
+        }).join('');
+
+      // Warning banners
+      if ((pct.queries || 0) >= 100) {
+        _showBanner('limit-banner', '🚫 Has alcanzado el límite de consultas este mes. <a href="#" onclick="Dashboard.showBillingTab();return false;">Actualiza tu plan →</a>', 'error');
+      } else if ((pct.queries || 0) >= 80) {
+        _showBanner('softlimit-banner', '⚠️ Estás al ' + Math.round(pct.queries) + '% de tus consultas mensuales. <a href="#" onclick="Dashboard.showBillingTab();return false;">Ver planes</a>', 'warning');
+      }
+    } catch (_) {}
+  }
+
+  function _showBanner(id, html, type) {
+    let el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = id;
+      const overviewHeader = document.querySelector('#tab-overview .dash-tab__header');
+      if (overviewHeader) overviewHeader.insertAdjacentElement('afterend', el);
+    }
+    const colors = { info: '#1e40af', warning: '#92400e', error: '#7f1d1d' };
+    el.style.cssText = `background:${colors[type]||colors.info};color:#e5e7eb;padding:0.625rem 1rem;border-radius:8px;font-size:0.875rem;margin-bottom:0.75rem;`;
+    el.innerHTML = html;
+  }
+
+  /** Navigate to billing tab */
+  function showBillingTab() {
+    document.querySelectorAll('.sidebar__item').forEach(i => i.classList.remove('sidebar__item--active'));
+    document.querySelector('.sidebar__item[data-tab="billing"]')?.classList.add('sidebar__item--active');
+    document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-billing')?.classList.add('active');
+    loadBillingPortal();
+  }
+
+  /** Load Billing Portal content (Req 7.1, 7.3, 7.5, 8.5) */
+  async function loadBillingPortal() {
+    const container = document.getElementById('billing-content');
+    if (!container) return;
+    const token = Auth.getAccessToken();
+    container.innerHTML = '<p style="color:#9ca3af;">Cargando datos del plan...</p>';
+    try {
+      const [subResp, plansResp] = await Promise.all([
+        fetch(`${API_BASE}/api/subscription`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/plans`)
+      ]);
+      if (!subResp.ok) throw new Error('No subscription');
+      const subData = await subResp.json();
+      const plansData = plansResp.ok ? await plansResp.json() : { plans: [] };
+      const sub = subData.subscription || {};
+      const currentPlan = subData.plan || {};
+      const plans = plansData.plans || [];
+      const TIER = { free: 0, starter: 1, business: 2, enterprise: 3 };
+      const currentTier = TIER[currentPlan.id] || 0;
+      const periodEnd = sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString('es-ES',{dateStyle:'long'}) : '—';
+
+      container.innerHTML = `
+<div style="margin-bottom:1.5rem;padding:1rem;background:#111827;border:1px solid #374151;border-radius:10px;">
+  <div style="font-size:0.8rem;color:#9ca3af;margin-bottom:0.25rem;">Plan actual</div>
+  <div style="font-size:1.25rem;font-weight:700;color:#f9fafb;">${currentPlan.name || currentPlan.id || 'Free'}</div>
+  <div style="font-size:0.8rem;color:#6b7280;margin-top:0.25rem;">Estado: <strong style="color:#d1d5db;">${sub.status || 'active'}</strong> · Próxima renovación: ${periodEnd}</div>
+  ${sub.scheduled_plan_id ? `<div style="margin-top:0.5rem;font-size:0.8rem;color:#f59e0b;">⏳ Cambio programado a <strong>${sub.scheduled_plan_id}</strong> el ${periodEnd}</div>` : ''}
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.75rem;margin-bottom:1.5rem;">
+  ${plans.map(p => {
+    const tier = TIER[p.id] || 0;
+    const isCurrent = p.id === currentPlan.id;
+    const isUpgrade = tier > currentTier;
+    const isDowngrade = tier < currentTier;
+    const price = p.price_monthly_usd > 0 ? `$${p.price_monthly_usd}/mes` : 'Gratis';
+    let btn = '';
+    if (isCurrent) btn = `<button class="btn btn--ghost btn--sm" disabled style="opacity:0.5;">Plan actual</button>`;
+    else if (isUpgrade) btn = `<button class="btn btn--primary btn--sm" onclick="Dashboard._upgradePlan('${p.id}')">Actualizar</button>`;
+    else if (isDowngrade && p.id !== 'enterprise') btn = `<button class="btn btn--ghost btn--sm" onclick="Dashboard._downgradePlan('${p.id}')">Cambiar</button>`;
+    return `<div style="background:#111827;border:1px solid ${isCurrent?'#6366f1':'#374151'};border-radius:10px;padding:1rem;">
+      <div style="font-weight:600;color:#f9fafb;margin-bottom:0.2rem;">${p.name}</div>
+      <div style="font-size:0.85rem;color:#6366f1;font-weight:700;margin-bottom:0.5rem;">${price}</div>
+      ${btn}
+    </div>`;
+  }).join('')}
+</div>
+${sub.status !== 'cancelled' ? `<button class="btn btn--ghost btn--sm" style="color:#ef4444;" onclick="Dashboard._cancelSubscription()">Cancelar suscripción</button>` : ''}
+`;
+    } catch (e) {
+      container.innerHTML = '<p style="color:#9ca3af;">Error al cargar el portal de facturación.</p>';
+    }
+  }
+
+  async function _upgradePlan(planId) {
+    if (!confirm(`¿Actualizar al plan ${planId}?`)) return;
+    const token = Auth.getAccessToken();
+    try {
+      const r = await fetch(`${API_BASE}/api/subscription/upgrade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ newPlanId: planId })
+      });
+      const d = await r.json();
+      if (r.ok) { showToast('Plan actualizado correctamente', 'success'); loadBillingPortal(); loadPlanBadge(); }
+      else showToast(d.error || 'Error al actualizar plan', 'error');
+    } catch (_) { showToast('Error de conexión', 'error'); }
+  }
+
+  async function _downgradePlan(planId) {
+    if (!confirm(`¿Programar cambio al plan ${planId} al final del período actual?`)) return;
+    const token = Auth.getAccessToken();
+    try {
+      const r = await fetch(`${API_BASE}/api/subscription/downgrade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ newPlanId: planId })
+      });
+      const d = await r.json();
+      if (r.ok) { showToast(`Cambio a ${planId} programado para el ${new Date(d.effective_date).toLocaleDateString('es-ES')}`, 'success'); loadBillingPortal(); }
+      else showToast(d.error || 'Error al programar cambio', 'error');
+    } catch (_) { showToast('Error de conexión', 'error'); }
+  }
+
+  async function _cancelSubscription() {
+    if (!confirm('¿Cancelar tu suscripción? Conservarás el acceso hasta el final del período actual.')) return;
+    const token = Auth.getAccessToken();
+    try {
+      const r = await fetch(`${API_BASE}/api/subscription/cancel`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }
+      });
+      const d = await r.json();
+      if (r.ok) { showToast('Suscripción cancelada. Acceso hasta ' + new Date(d.access_until).toLocaleDateString('es-ES'), 'success'); loadBillingPortal(); }
+      else showToast(d.error || 'Error al cancelar', 'error');
+    } catch (_) { showToast('Error de conexión', 'error'); }
+  }
+
+  return { init, loadDashboardData, displayTenantInfo, showConfirmDialog, loadPlanBadge, loadUsageSection, showBillingTab, loadBillingPortal, _upgradePlan, _downgradePlan, _cancelSubscription };
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════════

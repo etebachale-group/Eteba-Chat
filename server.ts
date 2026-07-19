@@ -22,6 +22,10 @@ import { proxyDispatcher } from './proxy-dispatcher.js';
 import { healthTracker } from './health-tracker.js';
 import type { BusinessType } from './connector-cache.js';
 import { signToken, verifyToken, decodeLegacyToken } from './auth-token.js';
+import { requirePlanLimit } from './enforcement-gate.js';
+import { incrementQueryCount, syncResourceCounts, getUsageSummary } from './usage-tracker.js';
+import { sendPlanEmail } from './email-service.js';
+import { checkTrialExpirations, applyScheduledDowngrades, checkPastDueDowngrades, sendDowngradeWarnings } from './trial-expiry-job.js';
 
 // Wire health tracker → registry (idempotent if router already wired it)
 healthTracker.setStatusChangeCallback(async (tenantId, status, error) => {
@@ -53,7 +57,7 @@ app.use(express.static(path.join(__dirname, '..')));
  * POST /api/query
  * Body: { tenantId: string, prompt: string }
  */
-app.post('/api/query', async (req: express.Request, res: express.Response) => {
+app.post('/api/query', requirePlanLimit('query'), async (req: express.Request, res: express.Response) => {
   const { tenantId, prompt, user } = req.body;
 
   if (!tenantId || !prompt) {
@@ -66,12 +70,21 @@ app.post('/api/query', async (req: express.Request, res: express.Response) => {
     const results = await hybridQuery(tenantId, prompt, userId);
     res.json(results);
 
-    // Fire-and-forget: track query in query_counts (non-blocking)
-    Promise.resolve(
-      insforge.database
-        .from('query_counts')
-        .insert([{ tenant_id: tenantId, query_text: prompt, user_id: userId, created_at: new Date().toISOString() }])
-    ).then(() => {}).catch(() => {});
+    // Atomic increment + threshold email triggers (fire-and-forget)
+    incrementQueryCount(tenantId).then(async () => {
+      try {
+        const summary = await getUsageSummary(tenantId);
+        const pct = summary.percentages.queries;
+        const limit = summary.limits.monthly_query_limit;
+        if (limit !== null) {
+          if (pct >= 100) {
+            sendPlanEmail(tenantId, 'hard_limit_reached', { limit, planName: summary.limits.monthly_query_limit }).catch(() => {});
+          } else if (pct >= 80) {
+            sendPlanEmail(tenantId, 'soft_limit_warning', { limit, count: summary.query_count }).catch(() => {});
+          }
+        }
+      } catch { /* non-fatal */ }
+    }).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error interno del servidor en RAG.' });
   }
@@ -185,7 +198,7 @@ app.get('/api/catalog', async (req: express.Request, res: express.Response) => {
  * POST /api/catalog
  * Body: { tenantId, name, description, price, stock, image_url }
  */
-app.post('/api/catalog', async (req: express.Request, res: express.Response) => {
+app.post('/api/catalog', requirePlanLimit('product'), async (req: express.Request, res: express.Response) => {
   const { tenantId, name, description, price, stock, image_url } = req.body;
 
   if (!tenantId || !name) {
@@ -201,6 +214,7 @@ app.post('/api/catalog', async (req: express.Request, res: express.Response) => 
 
     if (error) throw error;
     res.json({ success: true, product: data?.[0] });
+    syncResourceCounts(tenantId).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al agregar producto' });
   }
@@ -211,7 +225,7 @@ app.post('/api/catalog', async (req: express.Request, res: express.Response) => 
  * POST /api/catalog/bulk
  * Body: { tenantId, products: Array<{ name, description?, price, stock?, image_url? }> }
  */
-app.post('/api/catalog/bulk', async (req: express.Request, res: express.Response) => {
+app.post('/api/catalog/bulk', requirePlanLimit('product'), async (req: express.Request, res: express.Response) => {
   const { tenantId, products } = req.body;
 
   if (!tenantId) {
@@ -232,6 +246,7 @@ app.post('/api/catalog/bulk', async (req: express.Request, res: express.Response
 
     if (error) throw error;
     res.json({ success: true, inserted: data?.length || products.length });
+    syncResourceCounts(tenantId).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al importar productos' });
   }
@@ -335,6 +350,7 @@ app.delete('/api/catalog/:id', async (req: express.Request, res: express.Respons
     if (deleteError) throw deleteError;
 
     res.json({ success: true });
+    syncResourceCounts(tenantId).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al eliminar producto' });
   }
@@ -369,7 +385,7 @@ app.get('/api/metrics/queries', async (req: express.Request, res: express.Respon
  * POST /api/keys/generate
  * Body: { tenantId }
  */
-app.post('/api/keys/generate', async (req: express.Request, res: express.Response) => {
+app.post('/api/keys/generate', requirePlanLimit('api_key'), async (req: express.Request, res: express.Response) => {
   const { tenantId } = req.body;
 
   if (!tenantId) {
@@ -386,6 +402,7 @@ app.post('/api/keys/generate', async (req: express.Request, res: express.Respons
 
     if (error) throw error;
     res.json({ success: true, key: generatedKey });
+    syncResourceCounts(tenantId).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al generar API key' });
   }
@@ -450,6 +467,149 @@ function getGoogleRedirectUri() {
   const base = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
   return `${base}/auth/google/callback`;
 }
+
+/**
+ * POST /auth/register — email/password sign-up
+ * Body: { name, email, password, passwordConfirm }
+ */
+app.post('/auth/register', async (req: express.Request, res: express.Response) => {
+  const { name, email, password, passwordConfirm } = req.body;
+
+  // Validation
+  if (!name || name.length < 2 || name.length > 128) {
+    res.status(400).json({ error: 'validation', field: 'name', message: 'Name must be 2–128 characters' });
+    return;
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+    res.status(400).json({ error: 'validation', field: 'email', message: 'Valid email required' });
+    return;
+  }
+  if (!password || password.length < 8) {
+    res.status(400).json({ error: 'validation', field: 'password', message: 'Password must be at least 8 characters' });
+    return;
+  }
+  if (password !== passwordConfirm) {
+    res.status(400).json({ error: 'validation', field: 'passwordConfirm', message: 'Passwords do not match' });
+    return;
+  }
+
+  try {
+    // Check email uniqueness
+    const { data: existing } = await insforge.database
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase().trim())
+      .maybeSingle();
+
+    if (existing) {
+      res.status(409).json({ error: 'email_exists', message: 'Email already registered', signInUrl: '/auth/login' });
+      return;
+    }
+
+    // Hash password with bcrypt cost factor 12
+    const bcrypt = await import('bcrypt');
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Create user
+    const { data: newUser, error: userError } = await insforge.database
+      .from('users')
+      .insert([{
+        email: email.toLowerCase().trim(),
+        name,
+        password_hash: passwordHash,
+        role: 'tenant',
+        onboarding_completed: false,
+        onboarding_step: 0,
+        onboarding_step_data: {},
+      }])
+      .select()
+      .single();
+
+    if (userError || !newUser) {
+      throw new Error(userError?.message || 'Failed to create user');
+    }
+
+    const userId = newUser.id;
+
+    // Create company
+    await insforge.database
+      .from('companies')
+      .insert([{ id: userId, name, owner_id: userId }]);
+
+    // Create free subscription
+    const now = new Date();
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const serviceInsforge = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+    await serviceInsforge.database
+      .from('subscriptions')
+      .insert([{
+        tenant_id: userId,
+        plan_id: 'free',
+        status: 'active',
+        current_period_start: now.toISOString(),
+        current_period_end: periodEnd.toISOString(),
+      }]);
+
+    // Welcome email (fire-and-forget)
+    const { sendPlanEmail } = await import('./email-service.js');
+    sendPlanEmail(userId, 'welcome', { name }).catch(() => {});
+
+    // Return token
+    const token = signToken({ id: userId, email: newUser.email, name, role: 'tenant', tenantId: userId, avatar_url: null });
+    res.status(201).json({ token, user: { id: userId, email: newUser.email, name, role: 'tenant', tenantId: userId }, isNewUser: true });
+  } catch (err: any) {
+    console.error('Register error:', err);
+    res.status(500).json({ error: 'internal', message: err.message });
+  }
+});
+
+/**
+ * POST /auth/login — email/password sign-in
+ * Body: { email, password }
+ */
+app.post('/auth/login', async (req: express.Request, res: express.Response) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    res.status(400).json({ error: 'validation', message: 'Email and password required' });
+    return;
+  }
+
+  try {
+    const { data: user } = await insforge.database
+      .from('users')
+      .select('id, email, name, password_hash, role, onboarding_completed')
+      .eq('email', email.toLowerCase().trim())
+      .maybeSingle();
+
+    if (!user || !user.password_hash) {
+      res.status(401).json({ error: 'invalid_credentials', message: 'Invalid email or password' });
+      return;
+    }
+
+    const bcrypt = await import('bcrypt');
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) {
+      res.status(401).json({ error: 'invalid_credentials', message: 'Invalid email or password' });
+      return;
+    }
+
+    // Get tenantId (company id = user id for tenant-created accounts)
+    const { data: company } = await insforge.database
+      .from('companies')
+      .select('id')
+      .eq('owner_id', user.id)
+      .maybeSingle();
+
+    const tenantId = company?.id || user.id;
+    const token = signToken({ id: user.id, email: user.email, name: user.name, role: user.role || 'tenant', tenantId, avatar_url: null });
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role || 'tenant', tenantId }, onboarding_completed: user.onboarding_completed });
+  } catch (err: any) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'internal', message: err.message });
+  }
+});
 
 /**
  * Iniciar login con Google
@@ -530,6 +690,7 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
     let userId: string;
     let userRole = 'user';
     let linkedTenantId: string | null = null;
+    let isNewUser = false;
 
     if (existingUser) {
       userId = existingUser.id;
@@ -538,6 +699,8 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
         .update({ name: profile.name, email: profile.email, avatar_url: profile.picture, updated_at: new Date().toISOString() })
         .eq('id', userId);
     } else {
+      isNewUser = true;
+
       // Crear nuevo usuario
       const { data: newUser, error } = await insforge.database
         .from('users')
@@ -560,6 +723,24 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
       await insforge.database
         .from('companies')
         .insert([{ id: userId, name: profile.name, owner_id: userId }]);
+
+      // Crear suscripción Free para el nuevo usuario
+      const now = new Date();
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+      await serviceClient.database
+        .from('subscriptions')
+        .insert([{
+          tenant_id: newUser.id,
+          plan_id: 'free',
+          status: 'active',
+          current_period_start: now.toISOString(),
+          current_period_end: periodEnd.toISOString(),
+        }]);
+
+      // Enviar email de bienvenida (fire-and-forget)
+      const { sendPlanEmail } = await import('./email-service.js');
+      sendPlanEmail(newUser.id, 'welcome', { name: profile.name }).catch(() => {});
     }
 
     // ─── Verificar si el email es owner de algún negocio/tenant ────────────
@@ -587,8 +768,12 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
 
     const token = signToken(userPayload);
 
-    // Redirigir al frontend con el token
-    res.redirect(`/?auth_token=${token}`);
+    // Redirigir al frontend con el token — nuevos usuarios van al onboarding
+    if (isNewUser) {
+      res.redirect(`/?auth_token=${token}&new_user=true`);
+    } else {
+      res.redirect(`/?auth_token=${token}`);
+    }
   } catch (err: any) {
     console.error('❌ Error en Google OAuth callback:', err);
     res.status(500).send('Error interno de autenticación');
@@ -671,12 +856,14 @@ function handleConnectorError(err: unknown, res: express.Response) {
 }
 
 // POST /api/connectors — Create
-app.post('/api/connectors', async (req: express.Request, res: express.Response) => {
+app.post('/api/connectors', requirePlanLimit('connector'), async (req: express.Request, res: express.Response) => {
   const tenantId = getTenantIdFromRequest(req);
   if (!tenantId) { res.status(401).json({ error: 'Unauthorized' }); return; }
   try {
     const config = await createConnector(tenantId, req.body);
     res.status(201).json({ connector: config });
+    const tid = getTenantIdFromRequest(req);
+    if (tid) syncResourceCounts(tid).catch(() => {});
   } catch (err) { handleConnectorError(err, res); }
 });
 
@@ -767,6 +954,470 @@ app.get('/api/connectors/template', async (req: express.Request, res: express.Re
   } catch (err) { handleConnectorError(err, res); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLANS & SUBSCRIPTION API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/plans — public plan listing (no auth required)
+ */
+app.get('/api/plans', async (_req: express.Request, res: express.Response) => {
+  try {
+    const { data, error } = await insforge.database
+      .from('plans')
+      .select('*')
+      .order('price_monthly_usd', { ascending: true });
+
+    if (error) throw error;
+    res.json({ plans: data || [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/subscription — current tenant subscription + usage summary
+ */
+app.get('/api/subscription', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  try {
+    const { getUsageSummary } = await import('./usage-tracker.js');
+
+    const { data: sub, error: subError } = await insforge.database
+      .from('subscriptions')
+      .select('*, plans(*)')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (subError) throw subError;
+    if (!sub) { res.status(404).json({ error: 'subscription_not_found' }); return; }
+
+    const usage = await getUsageSummary(tenantId);
+
+    let daysUntilTrialEnd: number | undefined;
+    if (sub.status === 'trialing' && sub.trial_ends_at) {
+      const msLeft = new Date(sub.trial_ends_at).getTime() - Date.now();
+      daysUntilTrialEnd = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
+    }
+
+    // Also get onboarding status
+    const { data: user } = await insforge.database
+      .from('users')
+      .select('onboarding_completed')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    res.json({
+      subscription: sub,
+      plan: sub.plans,
+      usage,
+      daysUntilTrialEnd,
+      onboarding_completed: user?.onboarding_completed ?? true,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/subscription/trial — activate Business trial
+ */
+app.post('/api/subscription/trial', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: sub, error: subError } = await serviceClient.database
+      .from('subscriptions')
+      .select('id, plan_id, status, trial_used_at')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (subError) throw subError;
+    if (!sub) { res.status(404).json({ error: 'subscription_not_found' }); return; }
+
+    // Reject if trial already used
+    if (sub.trial_used_at) {
+      res.status(409).json({ error: 'trial_already_used' });
+      return;
+    }
+
+    const now = new Date();
+    const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    // Write audit entry FIRST (Req 11.3)
+    await writeAuditEntry(serviceClient, sub.id, 'trial_start', sub.plan_id, 'business', 'user');
+
+    // Update subscription
+    await serviceClient.database
+      .from('subscriptions')
+      .update({
+        plan_id: 'business',
+        status: 'trialing',
+        trial_ends_at: trialEnd.toISOString(),
+        trial_used_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq('tenant_id', tenantId);
+
+    res.json({ success: true, trial_ends_at: trialEnd.toISOString() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLAN UPGRADE / DOWNGRADE / CANCEL
+// Requirements: 7.1–7.7, 11.2, 11.3
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Writes an audit entry to subscription_events BEFORE mutating the subscription.
+ * All subscription state transitions must call this first (Req 11.3).
+ */
+async function writeAuditEntry(
+  serviceClient: ReturnType<typeof createClient>,
+  subscriptionId: string,
+  eventType: string,
+  oldPlanId: string | null,
+  newPlanId: string,
+  triggeredBy: 'user' | 'system' | 'trial_expiry',
+  metadata: Record<string, any> = {}
+): Promise<void> {
+  const { error } = await serviceClient.database
+    .from('subscription_events')
+    .insert([{
+      subscription_id: subscriptionId,
+      event_type: eventType,
+      old_plan_id: oldPlanId,
+      new_plan_id: newPlanId,
+      triggered_by: triggeredBy,
+      metadata,
+    }]);
+  if (error) {
+    // Log but don't block the main operation — audit failure should not prevent transitions
+    console.error('[writeAuditEntry] Failed to write audit entry:', error);
+  }
+}
+
+// Plan tier order for upgrade/downgrade validation
+const PLAN_TIER: Record<string, number> = { free: 0, starter: 1, business: 2, enterprise: 3 };
+
+/**
+ * POST /api/subscription/upgrade — change to a higher plan
+ * Body: { newPlanId: string }
+ */
+app.post('/api/subscription/upgrade', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  const { newPlanId } = req.body;
+  if (!newPlanId || !(newPlanId in PLAN_TIER)) {
+    res.status(400).json({ error: 'invalid_plan' });
+    return;
+  }
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: sub, error: subError } = await serviceClient.database
+      .from('subscriptions')
+      .select('id, plan_id, status, scheduled_plan_id')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (subError) throw subError;
+    if (!sub) { res.status(404).json({ error: 'subscription_not_found' }); return; }
+
+    if (PLAN_TIER[newPlanId] <= PLAN_TIER[sub.plan_id]) {
+      res.status(400).json({ error: 'invalid_upgrade', message: 'newPlanId must be a higher tier than current plan' });
+      return;
+    }
+
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    // Write audit entry FIRST (Req 11.3)
+    await writeAuditEntry(serviceClient, sub.id, 'upgrade', sub.plan_id, newPlanId, 'user');
+
+    // Update subscription
+    await serviceClient.database
+      .from('subscriptions')
+      .update({
+        plan_id: newPlanId,
+        status: 'active',
+        scheduled_plan_id: null,
+        current_period_start: now.toISOString(),
+        current_period_end: periodEnd.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq('tenant_id', tenantId);
+
+    // Send confirmation email (fire-and-forget)
+    const { sendPlanEmail } = await import('./email-service.js');
+    sendPlanEmail(tenantId, 'upgrade_confirmed', {
+      newPlanId,
+      newPlanName: newPlanId.charAt(0).toUpperCase() + newPlanId.slice(1),
+      effectiveDate: now.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+    }).catch(() => {});
+
+    res.json({ success: true, plan_id: newPlanId, current_period_end: periodEnd.toISOString() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/subscription/downgrade — schedule a downgrade for period end
+ * Body: { newPlanId: string }
+ */
+app.post('/api/subscription/downgrade', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  const { newPlanId } = req.body;
+  if (!newPlanId || !(newPlanId in PLAN_TIER)) {
+    res.status(400).json({ error: 'invalid_plan' });
+    return;
+  }
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: sub, error: subError } = await serviceClient.database
+      .from('subscriptions')
+      .select('id, plan_id, status, current_period_end')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (subError) throw subError;
+    if (!sub) { res.status(404).json({ error: 'subscription_not_found' }); return; }
+
+    if (PLAN_TIER[newPlanId] >= PLAN_TIER[sub.plan_id]) {
+      res.status(400).json({ error: 'invalid_downgrade', message: 'newPlanId must be a lower tier than current plan' });
+      return;
+    }
+
+    // Write audit entry FIRST (Req 11.3)
+    await writeAuditEntry(serviceClient, sub.id, 'downgrade', sub.plan_id, newPlanId, 'user');
+
+    // Schedule the downgrade — plan_id stays unchanged until period end
+    await serviceClient.database
+      .from('subscriptions')
+      .update({ scheduled_plan_id: newPlanId, updated_at: new Date().toISOString() })
+      .eq('tenant_id', tenantId);
+
+    // Check if usage already exceeds new plan limits (Req 7.5)
+    const { getUsageSummary } = await import('./usage-tracker.js');
+    const { getPlanLimits } = await import('./plans-cache.js');
+    const [usage, newPlanLimits] = await Promise.all([
+      getUsageSummary(tenantId),
+      getPlanLimits(newPlanId),
+    ]);
+
+    const warnings: string[] = [];
+    if (newPlanLimits.monthly_query_limit !== null && usage.query_count > newPlanLimits.monthly_query_limit) {
+      warnings.push(`queries: current ${usage.query_count} exceeds new limit ${newPlanLimits.monthly_query_limit}`);
+    }
+    if (newPlanLimits.product_limit !== null && usage.product_count > newPlanLimits.product_limit) {
+      warnings.push(`products: current ${usage.product_count} exceeds new limit ${newPlanLimits.product_limit}`);
+    }
+    if (usage.connector_count > newPlanLimits.connector_limit) {
+      warnings.push(`connectors: current ${usage.connector_count} exceeds new limit ${newPlanLimits.connector_limit}`);
+    }
+    if (newPlanLimits.api_key_limit !== null && usage.api_key_count > newPlanLimits.api_key_limit) {
+      warnings.push(`api_keys: current ${usage.api_key_count} exceeds new limit ${newPlanLimits.api_key_limit}`);
+    }
+
+    res.json({
+      success: true,
+      scheduled_plan_id: newPlanId,
+      effective_date: sub.current_period_end,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/subscription/cancel — cancel subscription
+ */
+app.post('/api/subscription/cancel', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: sub, error: subError } = await serviceClient.database
+      .from('subscriptions')
+      .select('id, plan_id, current_period_end')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (subError) throw subError;
+    if (!sub) { res.status(404).json({ error: 'subscription_not_found' }); return; }
+
+    // Write audit entry FIRST (Req 11.3)
+    await writeAuditEntry(serviceClient, sub.id, 'cancellation', sub.plan_id, sub.plan_id, 'user');
+
+    // Set status=cancelled, schedule downgrade to free at period end
+    await serviceClient.database
+      .from('subscriptions')
+      .update({
+        status: 'cancelled',
+        scheduled_plan_id: 'free',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('tenant_id', tenantId);
+
+    res.json({ success: true, access_until: sub.current_period_end });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ONBOARDING API
+// Requirements: 1.6, 1.7, 1.9, 2.4, 2.5, 2.11, 3.8
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/onboarding/step — persist step data
+ */
+app.post('/api/onboarding/step', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  const { step, data } = req.body;
+  if (!step || step < 1 || step > 5 || !data) {
+    res.status(400).json({ error: 'validation', message: 'step must be 1–5 and data is required' });
+    return;
+  }
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    // Fetch current step_data
+    const { data: user } = await serviceClient.database
+      .from('users')
+      .select('onboarding_step_data')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    const currentStepData = (user?.onboarding_step_data as Record<string, any>) || {};
+    currentStepData[String(step)] = data;
+
+    await serviceClient.database
+      .from('users')
+      .update({ onboarding_step: step, onboarding_step_data: currentStepData })
+      .eq('id', tenantId);
+
+    res.json({ success: true, step });
+  } catch (err: any) {
+    res.status(500).json({ error: 'internal', message: err.message });
+  }
+});
+
+/**
+ * GET /api/onboarding/status — return current wizard state
+ */
+app.get('/api/onboarding/status', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: user } = await serviceClient.database
+      .from('users')
+      .select('onboarding_completed, onboarding_step, onboarding_step_data')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    res.json({
+      completed: user?.onboarding_completed ?? false,
+      currentStep: user?.onboarding_step ?? 0,
+      stepData: user?.onboarding_step_data ?? {},
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'internal', message: err.message });
+  }
+});
+
+/**
+ * POST /api/onboarding/complete — finalize wizard
+ */
+app.post('/api/onboarding/complete', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+    const now = new Date().toISOString();
+
+    await serviceClient.database
+      .from('users')
+      .update({ onboarding_completed: true, onboarding_completed_at: now })
+      .eq('id', tenantId);
+
+    // Apply plan from step 3 if provided
+    const { planId } = req.body;
+    if (planId && planId !== 'free') {
+      if (planId === 'trial') {
+        // Check if trial already used
+        const { data: sub } = await serviceClient.database
+          .from('subscriptions')
+          .select('trial_used_at')
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+        if (!sub?.trial_used_at) {
+          const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+          await serviceClient.database
+            .from('subscriptions')
+            .update({ plan_id: 'business', status: 'trialing', trial_ends_at: trialEnd, trial_used_at: now })
+            .eq('tenant_id', tenantId);
+        }
+      } else {
+        const validPlans = ['starter', 'business', 'enterprise'];
+        if (validPlans.includes(planId)) {
+          const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          await serviceClient.database
+            .from('subscriptions')
+            .update({ plan_id: planId, status: 'active', current_period_start: now, current_period_end: periodEnd })
+            .eq('tenant_id', tenantId);
+        }
+      }
+    }
+
+    res.json({ success: true, onboarding_completed_at: now });
+  } catch (err: any) {
+    res.status(500).json({ error: 'internal', message: err.message });
+  }
+});
+
+/**
+ * GET /api/usage — returns current tenant usage summary (auth-guarded)
+ * Requirements: 5.5, 8.2
+ */
+app.get('/api/usage', async (req: express.Request, res: express.Response) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  try {
+    const summary = await getUsageSummary(tenantId);
+    res.json(summary);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Levantar el servidor
 app.listen(PORT, () => {
   console.log(`\n======================================================`);
@@ -776,3 +1427,11 @@ app.listen(PORT, () => {
   console.log(`📌 OpenRouter: ${process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET'}`);
   console.log(`======================================================\n`);
 });
+
+// Run background jobs every hour
+setInterval(async () => {
+  try { await checkTrialExpirations(); } catch (e) { console.error('Trial expiry job error:', e); }
+  try { await applyScheduledDowngrades(); } catch (e) { console.error('Downgrade scheduler error:', e); }
+  try { await checkPastDueDowngrades(); } catch (e) { console.error('Past due downgrade error:', e); }
+  try { await sendDowngradeWarnings(); } catch (e) { console.error('Downgrade warnings error:', e); }
+}, 60 * 60 * 1000); // every hour

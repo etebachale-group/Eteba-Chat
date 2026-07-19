@@ -16,6 +16,9 @@
 
     // Cargar datos del dashboard si el usuario ya está logueado
     if (Auth.isLoggedIn()) {
+      if (typeof OnboardingWizard !== 'undefined') {
+        OnboardingWizard.init();
+      }
       Dashboard.loadDashboardData();
     }
   });

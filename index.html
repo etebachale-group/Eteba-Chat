@@ -153,57 +153,121 @@
           <h2 class="section__title">Planes para cada etapa</h2>
           <p class="section__subtitle">Empieza gratis. Escala cuando crezcas.</p>
         </div>
+
+        <!-- Billing toggle -->
+        <div class="pricing__toggle">
+          <span class="pricing__toggle-label pricing__toggle-label--active" id="toggle-monthly-label">Mensual</span>
+          <label class="pricing__switch">
+            <input type="checkbox" id="billing-toggle">
+            <span class="pricing__switch-track"></span>
+          </label>
+          <span class="pricing__toggle-label" id="toggle-annual-label">Anual <span class="pricing__save-badge">Ahorra 17%</span></span>
+        </div>
+
         <div class="pricing__grid">
-          <div class="pricing-card">
+
+          <!-- FREE -->
+          <div class="pricing-card" data-plan="free">
             <div class="pricing-card__header">
-              <h3>Starter</h3>
-              <div class="pricing-card__price">Gratis</div>
-              <p>Para emprendedores que empiezan</p>
+              <h3 class="pricing-card__name">Free</h3>
+              <div class="pricing-card__price">
+                <span class="pricing-card__amount" data-monthly="0" data-annual="0">$0</span>
+                <span class="pricing-card__period">/mes</span>
+              </div>
+              <p class="pricing-card__desc">Para emprendedores que empiezan</p>
             </div>
             <ul class="pricing-card__features">
-              <li>1 asistente activo</li>
-              <li>500 consultas/mes</li>
-              <li>Catálogo hasta 50 productos</li>
-              <li>Widget embebido</li>
-              <li>Soporte comunitario</li>
+              <li class="feature--yes">Widget embebido</li>
+              <li class="feature--yes">500 consultas/mes</li>
+              <li class="feature--yes">50 productos en catálogo</li>
+              <li class="feature--yes">1 conector de datos</li>
+              <li class="feature--no">Personalidad personalizada</li>
+              <li class="feature--no">API keys</li>
+              <li class="feature--no">Soporte prioritario</li>
             </ul>
-            <button class="btn btn--outline btn--full">Comenzar Gratis</button>
+            <button class="btn btn--outline btn--full pricing-cta" onclick="typeof RegistrationPage !== 'undefined' && RegistrationPage.show('free')">Comenzar Gratis</button>
           </div>
-          <div class="pricing-card pricing-card--popular">
-            <span class="pricing-card__badge">Popular</span>
+
+          <!-- STARTER -->
+          <div class="pricing-card" data-plan="starter">
             <div class="pricing-card__header">
-              <h3>Business</h3>
-              <div class="pricing-card__price">25.000 <span>CFA/mes</span></div>
-              <p>Para negocios en crecimiento</p>
+              <h3 class="pricing-card__name">Starter</h3>
+              <div class="pricing-card__price">
+                <span class="pricing-card__amount" data-monthly="19" data-annual="16">$19</span>
+                <span class="pricing-card__period">/mes</span>
+              </div>
+              <p class="pricing-card__desc">Para negocios que crecen</p>
             </div>
             <ul class="pricing-card__features">
-              <li>5 asistentes activos</li>
-              <li>10.000 consultas/mes</li>
-              <li>Catálogo ilimitado</li>
-              <li>API & Webhooks</li>
-              <li>Analytics avanzados</li>
-              <li>Soporte prioritario</li>
+              <li class="feature--yes">Widget embebido</li>
+              <li class="feature--yes">3,000 consultas/mes</li>
+              <li class="feature--yes">500 productos en catálogo</li>
+              <li class="feature--yes">1 conector de datos</li>
+              <li class="feature--yes">2 API keys</li>
+              <li class="feature--yes">Personalidad personalizada</li>
+              <li class="feature--yes">Soporte por email</li>
             </ul>
-            <button class="btn btn--primary btn--full">Elegir Business</button>
+            <button class="btn btn--outline btn--full pricing-cta" onclick="typeof RegistrationPage !== 'undefined' && RegistrationPage.show('starter')">Iniciar Prueba Gratis</button>
           </div>
-          <div class="pricing-card">
+
+          <!-- BUSINESS (Most Popular) -->
+          <div class="pricing-card pricing-card--popular" data-plan="business">
+            <span class="pricing-card__badge">Más Popular</span>
             <div class="pricing-card__header">
-              <h3>Enterprise</h3>
-              <div class="pricing-card__price">Personalizado</div>
-              <p>Para grandes empresas</p>
+              <h3 class="pricing-card__name">Business</h3>
+              <div class="pricing-card__price">
+                <span class="pricing-card__amount" data-monthly="49" data-annual="41">$49</span>
+                <span class="pricing-card__period">/mes</span>
+              </div>
+              <p class="pricing-card__desc">Para empresas en pleno crecimiento</p>
             </div>
             <ul class="pricing-card__features">
-              <li>Asistentes ilimitados</li>
-              <li>Consultas ilimitadas</li>
-              <li>Integraciones custom</li>
-              <li>SLA garantizado</li>
-              <li>Account manager dedicado</li>
-              <li>Despliegue on-premise</li>
+              <li class="feature--yes">Widget embebido</li>
+              <li class="feature--yes">15,000 consultas/mes</li>
+              <li class="feature--yes">5,000 productos en catálogo</li>
+              <li class="feature--yes">3 conectores de datos</li>
+              <li class="feature--yes">10 API keys</li>
+              <li class="feature--yes">Personalidad personalizada</li>
+              <li class="feature--yes">Soporte prioritario</li>
+              <li class="feature--yes">Analytics dashboard</li>
             </ul>
-            <button class="btn btn--outline btn--full">Contactar Ventas</button>
+            <button class="btn btn--primary btn--full pricing-cta" onclick="typeof RegistrationPage !== 'undefined' && RegistrationPage.show('business')">Iniciar Prueba Gratis</button>
           </div>
+
+          <!-- ENTERPRISE -->
+          <div class="pricing-card" data-plan="enterprise">
+            <div class="pricing-card__header">
+              <h3 class="pricing-card__name">Enterprise</h3>
+              <div class="pricing-card__price">
+                <span class="pricing-card__amount">Personalizado</span>
+              </div>
+              <p class="pricing-card__desc">Para grandes corporaciones</p>
+            </div>
+            <ul class="pricing-card__features">
+              <li class="feature--yes">Consultas ilimitadas</li>
+              <li class="feature--yes">Productos ilimitados</li>
+              <li class="feature--yes">Conectores ilimitados</li>
+              <li class="feature--yes">API keys ilimitadas</li>
+              <li class="feature--yes">Soporte dedicado</li>
+              <li class="feature--yes">Integraciones custom</li>
+              <li class="feature--yes">SLA garantizado</li>
+            </ul>
+            <a href="mailto:etebachalegroup@gmail.com" class="btn btn--outline btn--full">Contactar Ventas</a>
+          </div>
+
         </div>
       </div>
+      <script>
+        document.getElementById('billing-toggle')?.addEventListener('change', function() {
+          const isAnnual = this.checked;
+          document.getElementById('toggle-monthly-label').classList.toggle('pricing__toggle-label--active', !isAnnual);
+          document.getElementById('toggle-annual-label').classList.toggle('pricing__toggle-label--active', isAnnual);
+          document.querySelectorAll('.pricing-card__amount[data-monthly]').forEach(el => {
+            const val = isAnnual ? el.dataset.annual : el.dataset.monthly;
+            el.textContent = val > 0 ? '$' + val : '$0';
+          });
+        });
+      </script>
     </section>
 
   </main>
@@ -298,6 +362,10 @@
             <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/></svg>
             API Keys
           </a>
+          <a href="#" class="sidebar__item" data-tab="billing">
+            <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/></svg>
+            Planes & Facturación
+          </a>
         </div>
       </aside>
 
@@ -312,6 +380,7 @@
                 <p id="dash-subtitle">Resumen de actividad de tu asistente</p>
               </div>
               <div class="dash-header-actions">
+                <div id="plan-badge-container"></div>
                 <span class="dash-status"><span class="dash-status__dot"></span> Asistente activo</span>
               </div>
             </div>
@@ -351,6 +420,9 @@
               Probar chat
             </button>
           </div>
+
+          <!-- Usage Section (plan limits progress bars — populated by loadUsageSection) -->
+          <div id="usage-section" class="card" style="margin-bottom:1.5rem;padding:1rem;"></div>
 
           <div class="dash-tab__row">
             <div class="card">
@@ -474,6 +546,17 @@ Content-Type: application/json
           </div>
           <div class="table-wrapper" id="catalog-table">
             <p class="text-muted">Cargando catálogo...</p>
+          </div>
+        </div>
+
+        <!-- Tab: Planes & Facturación (Billing Portal) -->
+        <div class="dash-tab" id="tab-billing">
+          <div class="dash-tab__header">
+            <h2>Planes &amp; Facturación</h2>
+            <p>Gestiona tu suscripción, compara planes y controla tu uso</p>
+          </div>
+          <div id="billing-content">
+            <p style="color:#9ca3af;">Cargando datos del plan...</p>
           </div>
         </div>
 
@@ -1091,6 +1174,8 @@ Solo eso. No necesito autenticación.</pre>
   <script src="scripts/auth.js"></script>
   <script src="scripts/explore.js"></script>
   <script src="scripts/dashboard.js"></script>
+  <script src="scripts/registration.js"></script>
+  <script src="scripts/onboarding.js"></script>
   <script src="scripts/app.js"></script>
 </body>
 </html>
