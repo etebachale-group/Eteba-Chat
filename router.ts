@@ -84,12 +84,13 @@ async function tryConnectorDispatch(tenantId: string, userQuery: string, decisio
   }
   rateLimiter.record(tenantId);
 
-  // 6. Map intent to action (Req 8.7)
-  const { action, params } = mapIntentToAction(decision.type, config.business_type, userQuery);
-  console.log(`🔗 Connector dispatch | tenant: ${tenantId} | action: ${action}`);
+  // 6. Map intent to action (Req 8.7) - Pass the clean decision.term instead of raw query
+  const cleanTerm = decision.term;
+  let { action, params } = mapIntentToAction(decision.type, config.business_type, cleanTerm);
+  console.log(`🔗 Connector dispatch | tenant: ${tenantId} | action: ${action} | term: "${params.term || ''}"`);
 
   // 7. Dispatch
-  const proxyResponse = await proxyDispatcher.dispatch(config, { action, params });
+  let proxyResponse = await proxyDispatcher.dispatch(config, { action, params });
 
   if (proxyResponse.error) {
     await healthTracker.recordFailure(tenantId, proxyResponse.error);
@@ -97,7 +98,29 @@ async function tryConnectorDispatch(tenantId: string, userQuery: string, decisio
   }
 
   healthTracker.recordSuccess(tenantId);
-  const results = Array.isArray(proxyResponse.data) ? proxyResponse.data : (proxyResponse.data ? [proxyResponse.data] : []);
+  let results = Array.isArray(proxyResponse.data) ? proxyResponse.data : (proxyResponse.data ? [proxyResponse.data] : []);
+
+  // 8. Synonym fallback if initial product search is empty
+  if ((action === 'search_products' || action === 'search') && results.length === 0 && cleanTerm) {
+    const expanded = expandSearchTerms(cleanTerm);
+    const synonymsToTry = expanded.filter(t => t !== cleanTerm.toLowerCase().trim()).slice(0, 3);
+    
+    for (const synonym of synonymsToTry) {
+      console.log(`🔍 Intentando con sinónimo/variante en conector: "${synonym}"`);
+      const retryParams = { ...params, term: synonym };
+      const retryResponse = await proxyDispatcher.dispatch(config, { action, params: retryParams });
+      
+      if (!retryResponse.error) {
+        const retryResults = Array.isArray(retryResponse.data) ? retryResponse.data : (retryResponse.data ? [retryResponse.data] : []);
+        if (retryResults.length > 0) {
+          results = retryResults;
+          console.log(`✅ ¡Éxito! Encontrados ${results.length} producto(s) usando "${synonym}"`);
+          break;
+        }
+      }
+    }
+  }
+
   return { results, humanContext: getSystemPromptInstructions(config.business_type) };
 }
 
@@ -694,13 +717,15 @@ function classifyIntentHeuristically(query: string, history: ConversationMessage
       /precio\s+de\s+/gi,
       /tienen\s+/gi, /busco\s+/gi, /venden\s+/gi,
       /necesito\s+/gi, /quiero\s+(ver|comprar|encargar)\s+/gi,
-      /hay\s+/gi, /mostrar\s+/gi,
+      /hay\s+/gi, /mostrar\s+/gi, /mu[eé]strame\s+/gi,
+      /ense[nñ]ame\s+/gi, /dime\s+/gi, /cuales\s+/gi, /cu[aá]les\s+/gi,
+      /hola\s+/gi, /saludos\s+/gi, /buenas\s+/gi, /gracias\s+/gi,
     ];
     noisePatterns.forEach(pat => { cleanQuery = cleanQuery.replace(pat, ''); });
 
     let searchTerms = cleanQuery.split(/\s+/).filter(word => {
       const cleanWord = word.toLowerCase().replace(/[^a-z0-9áéíóúñ]/g, '');
-      return cleanWord.length > 2 && !['que', 'del', 'los', 'las', 'con', 'para', 'una', 'uno', 'por', 'tiene', 'tienen', 'precio', 'cuesta', 'cuanto', 'como', 'donde', 'quiero', 'encargar', 'producto', 'productos', 'disponible', 'disponibles', 'mostrar', 'hay', 'ver'].includes(cleanWord);
+      return cleanWord.length > 2 && !['que', 'del', 'los', 'las', 'con', 'para', 'una', 'uno', 'por', 'tiene', 'tienen', 'precio', 'cuesta', 'cuanto', 'como', 'donde', 'quiero', 'encargar', 'producto', 'productos', 'disponible', 'disponibles', 'mostrar', 'hay', 'ver', 'muestrame', 'muéstrame', 'enséñame', 'enseñame', 'dime', 'cuales', 'cuáles', 'hola', 'saludos', 'buenas', 'gracias', 'tienda', 'buscar', 'busca', 'puedes', 'podrías', 'podrias'].includes(cleanWord);
     });
 
     const finalTerm = searchTerms.length > 0 ? searchTerms.join(' ') : '';

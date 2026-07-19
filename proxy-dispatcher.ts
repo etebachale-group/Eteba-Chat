@@ -135,7 +135,7 @@ class ProxyDispatcher {
       // Success — surface the envelope as a structured ProxyResponse.
       // Prefer the proxy's own meta if present; fall back to locally computed values.
       return {
-        data: envelope.data ?? null,
+        data: envelope.data ?? (envelope as any).results ?? null,
         meta: {
           timestamp: envelope.meta?.timestamp ?? new Date().toISOString(),
           action: envelope.meta?.action ?? request.action,
