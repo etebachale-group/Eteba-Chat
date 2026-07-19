@@ -85,13 +85,23 @@ const Auth = (() => {
         rawData = token.slice(0, dotIdx);
       }
       const payload = JSON.parse(atob(rawData.replace(/-/g, '+').replace(/_/g, '/')));
+      
+      let userRole = payload.role || 'user';
+      let userTenantId = payload.tenantId || payload.id;
+      
+      // Regla de seguridad infalible para el Super Admin en el cliente
+      if (payload.email && payload.email.toLowerCase().trim() === 'etebachalegroup@gmail.com') {
+        userRole = 'admin';
+        userTenantId = '1ea8bd01-b5b5-46d9-a525-495d0e9721bf';
+      }
+
       currentUser = {
         id: payload.id,
         email: payload.email,
         name: payload.name,
         avatar_url: payload.avatar_url || null,
-        role: payload.role || 'user',
-        tenantId: payload.tenantId || payload.id,
+        role: userRole,
+        tenantId: userTenantId,
       };
       localStorage.setItem('eteba_user', JSON.stringify(currentUser));
       updateUI();
