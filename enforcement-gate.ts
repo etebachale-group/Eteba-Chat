@@ -209,27 +209,30 @@ export async function enforcePlanLimit(
  */
 export function requirePlanLimit(resource: ResourceType) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    // --- Extract token ---
+    // --- Extract tenantId ---
+    // Priority 1: verified JWT (dashboard, API clients)
+    // Priority 2: tenantId from request body (public widget — no auth required)
+    let tenantId: string | null = null;
+
     const authHeader = req.headers['authorization'] ?? '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
 
-    if (!token) {
-      res.status(401).json({ error: 'unauthorized', message: 'Missing Authorization header' });
-      return;
+    if (token) {
+      const payload = verifyToken(token);
+      if (!payload) {
+        res.status(401).json({ error: 'unauthorized', message: 'Invalid or expired token' });
+        return;
+      }
+      tenantId = payload.tenantId ?? null;
     }
 
-    // --- Verify token ---
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      res.status(401).json({ error: 'unauthorized', message: 'Invalid or expired token' });
-      return;
+    // Fall back to tenantId in the request body (public widget calls)
+    if (!tenantId) {
+      tenantId = (req.body?.tenantId as string | undefined) ?? null;
     }
-
-    const tenantId = payload.tenantId;
 
     if (!tenantId) {
-      res.status(401).json({ error: 'unauthorized', message: 'Token missing tenantId' });
+      res.status(401).json({ error: 'unauthorized', message: 'Missing tenantId' });
       return;
     }
 
