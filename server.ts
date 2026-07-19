@@ -844,7 +844,7 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
     // 'admin'  → administrador de la plataforma Eteba Chat (acceso total)
     // 'tenant' → cliente/negocio que usa el servicio (acceso a su dashboard)
     const platformRoles: Record<string, { role: string; tenantId: string | null }> = {
-      'etebachalegroup@gmail.com': { role: 'admin',  tenantId: null },
+      'etebachalegroup@gmail.com': { role: 'admin',  tenantId: '1ea8bd01-b5b5-46d9-a525-495d0e9721bf' },
       'rotterinzakus@gmail.com':   { role: 'tenant', tenantId: 'e22e9ee0-d29a-4172-88de-fb9ad14c9c1b' },
     };
 
