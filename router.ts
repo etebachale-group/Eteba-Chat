@@ -614,7 +614,7 @@ ESTILO: Respuestas CORTAS y directas (1-3 frases). Usa el historial para entende
  * Enrutador Heurístico Ultra-Rápido en TypeScript (Cero llamadas de clasificación a la API de LLM)
  * Clasifica la intención analizando patrones de texto locales en milisegundos.
  */
-function classifyIntentHeuristically(query: string): { type: 'SALUDO_SOPORTE_GENERAL' | 'CATALOGO_SQL' | 'ENVIOS_SEMANTIC' | 'REGISTRO_PEDIDO' | 'TIENDAS' | 'ENVIO_CALCULO'; term: string } {
+function classifyIntentHeuristically(query: string, history: ConversationMessage[] = []): { type: 'SALUDO_SOPORTE_GENERAL' | 'CATALOGO_SQL' | 'ENVIOS_SEMANTIC' | 'REGISTRO_PEDIDO' | 'TIENDAS' | 'ENVIO_CALCULO'; term: string } {
   const q = query.toLowerCase().trim();
 
   // 1. Detección de registro de pedidos
@@ -627,14 +627,26 @@ function classifyIntentHeuristically(query: string): { type: 'SALUDO_SOPORTE_GEN
   }
 
   // 1b. Confirmación de pedido pendiente (usuario dice "sí", ciudad, "confirmar", etc.)
-  const confirmPatterns = ['confirmar', 'confirmo', 'si por favor', 'sí', 'dale', 'ok', 'de acuerdo', 'perfecto', 'listo'];
-  const cities = ['malabo', 'bata', 'ebebiyin', 'mongomo', 'evinayong', 'luba', 'riaba', 'accra', 'lomé', 'douala'];
-  const isConfirming = confirmPatterns.some(p => q === p || q.startsWith(p));
-  const mentionsCity = cities.some(c => q.includes(c));
-  if (isConfirming || mentionsCity) {
-    // Solo tratar como confirmación si hay pedido pendiente en la conversación
-    // (se detectará en el flujo por la memoria de contexto)
-    return { type: 'REGISTRO_PEDIDO', term: query };
+  // Solo tratar como confirmación si el último mensaje del asistente le pedía confirmar datos o dirección de entrega
+  const lastAssistantMsg = [...history].reverse().find(m => m.role === 'assistant');
+  const hasPendingOrderFlow = lastAssistantMsg && (
+    lastAssistantMsg.content.toLowerCase().includes('enviar') || 
+    lastAssistantMsg.content.toLowerCase().includes('dirección') || 
+    lastAssistantMsg.content.toLowerCase().includes('ciudad') || 
+    lastAssistantMsg.content.toLowerCase().includes('confirmar') ||
+    lastAssistantMsg.content.toLowerCase().includes('habitual') ||
+    lastAssistantMsg.content.toLowerCase().includes('comprar') ||
+    lastAssistantMsg.content.toLowerCase().includes('encargar')
+  );
+
+  if (hasPendingOrderFlow) {
+    const confirmPatterns = ['confirmar', 'confirmo', 'si por favor', 'sí', 'si', 'dale', 'ok', 'de acuerdo', 'perfecto', 'listo'];
+    const cities = ['malabo', 'bata', 'ebebiyin', 'mongomo', 'evinayong', 'luba', 'riaba', 'accra', 'lomé', 'douala'];
+    const isConfirming = confirmPatterns.some(p => q === p || q.startsWith(p));
+    const mentionsCity = cities.some(c => q.includes(c));
+    if (isConfirming || mentionsCity) {
+      return { type: 'REGISTRO_PEDIDO', term: query };
+    }
   }
 
   // 2. Detección de tiendas
@@ -705,12 +717,13 @@ export async function hybridQuery(tenantId: string, userQuery: string, userId?: 
   console.log(`📨 Query recibida | tenant: ${tenantId} | prompt: "${userQuery.substring(0, 50)}"`);
   
   const conversationKey = getConversationKey(tenantId, userId);
+  const history = getConversationHistory(conversationKey);
   
   // 1. Obtener manual operativo dinámico de la caché local
   const operationalManual = await getCachedOperationalManual(tenantId);
 
   // 2. Clasificación heurística instantánea
-  const decision = classifyIntentHeuristically(userQuery);
+  const decision = classifyIntentHeuristically(userQuery, history);
   console.log(`⚡ Clasificación Heurística: [${decision.type}] | Término: "${decision.term}"`);
 
   const rotteriTenantId = 'e22e9ee0-d29a-4172-88de-fb9ad14c9c1b';

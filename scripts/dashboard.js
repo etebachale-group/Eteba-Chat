@@ -4,12 +4,19 @@
  */
 const Dashboard = (() => {
   const API_BASE = window.location.origin;
+  let integrationsGridHTML = '';
 
   function init() {
     initSidebarTabs();
     initConfigForm();
     initCatalogActions();
     initApiKeyActions();
+
+    // Guardar estructura inicial de integraciones
+    const tabInt = document.getElementById('tab-integrations');
+    if (tabInt) {
+      integrationsGridHTML = tabInt.innerHTML;
+    }
   }
 
   /** Cargar datos cuando el usuario entra al dashboard */
@@ -87,10 +94,29 @@ const Dashboard = (() => {
             loadQueryMetrics(tenantId);
           } else if (tabName === 'billing') {
             loadBillingPortal();
+          } else if (tabName === 'integrations') {
+            const tabInt = document.getElementById('tab-integrations');
+            if (tabInt && integrationsGridHTML) {
+              tabInt.innerHTML = integrationsGridHTML;
+            }
+            initIntegrationsTab(tenantId);
           }
         }
       });
     });
+  }
+
+  /** Inicializar el botón de configurar webhooks en la grilla de integraciones */
+  function initIntegrationsTab(tenantId) {
+    const btnConfigure = document.getElementById('btn-configure-webhooks');
+    if (btnConfigure) {
+      btnConfigure.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (typeof WebhooksTab !== 'undefined') {
+          WebhooksTab.init(tenantId);
+        }
+      });
+    }
   }
 
   /** Cargar métricas del overview */
@@ -397,8 +423,19 @@ const Dashboard = (() => {
         const csvText = e.target.result;
         const { valid, skipped } = parseCSV(csvText);
 
+        // Si el lote excede 500 productos válidos (Req 5.4)
+        if (valid.length > 500) {
+          showToast('Máximo 500 productos por importación', 'error');
+          return;
+        }
+
+        // Si todos los productos fueron omitidos (Req 5.3)
         if (valid.length === 0) {
-          showToast('El formato del archivo no es válido', 'error');
+          if (skipped > 0) {
+            showToast('No se encontraron productos válidos en el archivo', 'error');
+          } else {
+            showToast('El archivo está vacío o el formato no es válido', 'error');
+          }
           return;
         }
 
@@ -414,9 +451,12 @@ const Dashboard = (() => {
 
           if (resp.ok) {
             loadCatalog(tenantId);
-            let msg = `Se importaron ${valid.length} productos`;
+            const data = await resp.json();
+            
+            // Mostrar Toast con conteo detallado (Req 4.2, 4.3)
+            let msg = `Importación: ${data.created || 0} creados, ${data.updated || 0} actualizados, ${data.unchanged || 0} sin cambios`;
             if (skipped > 0) {
-              msg += ` (${skipped} filas omitidas por datos incompletos)`;
+              msg += `. Omitidos por validación: ${skipped}`;
             }
             showToast(msg, 'success');
           } else {

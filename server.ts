@@ -23,9 +23,14 @@ import { healthTracker } from './health-tracker.js';
 import type { BusinessType } from './connector-cache.js';
 import { signToken, verifyToken, decodeLegacyToken } from './auth-token.js';
 import { requirePlanLimit } from './enforcement-gate.js';
+import { processUpsertBatch } from './upsert-logic.js';
 import { incrementQueryCount, syncResourceCounts, getUsageSummary } from './usage-tracker.js';
 import { sendPlanEmail } from './email-service.js';
 import { checkTrialExpirations, applyScheduledDowngrades, checkPastDueDowngrades, sendDowngradeWarnings } from './trial-expiry-job.js';
+import { validateUrl, validateEventTypes } from './webhook-validation.js';
+import { generateSigningSecret } from './webhook-signing.js';
+import { emitEvent, deliverToEndpoint, cancelPendingRetries, runDeliveryLogsCleanup } from './webhook-dispatcher.js';
+import type { WebhookEndpoint } from './webhook-types.js';
 
 // Wire health tracker → registry (idempotent if router already wired it)
 healthTracker.setStatusChangeCallback(async (tenantId, status, error) => {
@@ -69,6 +74,13 @@ app.post('/api/query', requirePlanLimit('query'), async (req: express.Request, r
     const userId = user?.id || user?.email || undefined;
     const results = await hybridQuery(tenantId, prompt, userId);
     res.json(results);
+
+    // Emitir evento message.received de webhook
+    emitEvent(tenantId, 'message.received', {
+      prompt,
+      userId,
+      response: results.humanResponse
+    }).catch(() => {});
 
     // Atomic increment + threshold email triggers (fire-and-forget)
     incrementQueryCount(tenantId).then(async () => {
@@ -214,6 +226,13 @@ app.post('/api/catalog', requirePlanLimit('product'), async (req: express.Reques
 
     if (error) throw error;
     res.json({ success: true, product: data?.[0] });
+
+    // Emitir evento catalog.updated de webhook
+    emitEvent(tenantId, 'catalog.updated', {
+      action: 'create',
+      product: data?.[0]
+    }).catch(() => {});
+
     syncResourceCounts(tenantId).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al agregar producto' });
@@ -238,14 +257,79 @@ app.post('/api/catalog/bulk', requirePlanLimit('product'), async (req: express.R
     return;
   }
 
-  try {
-    const { data, error } = await insforge.database
-      .from('products')
-      .insert(products.map((p: any) => ({ tenant_id: tenantId, ...p })))
-      .select();
+  // Validar tamaño máximo de lote (Req 5.4)
+  if (products.length > 500) {
+    res.status(400).json({ error: 'Máximo 500 productos por importación' });
+    return;
+  }
 
-    if (error) throw error;
-    res.json({ success: true, inserted: data?.length || products.length });
+  try {
+    // 1. Obtener productos existentes
+    const { data: existingProducts, error: fetchError } = await insforge.database
+      .from('products')
+      .select('*')
+      .eq('tenant_id', tenantId);
+
+    if (fetchError) throw fetchError;
+
+    // 2. Procesar el lote de upsert
+    const { toInsert, toUpdate, unchangedCount } = processUpsertBatch(products, existingProducts || []);
+
+    // 3. Ejecutar de forma atómica en una transacción a través de la función RPC
+    let txError: any = null;
+    if (typeof (insforge as any).database?.rpc === 'function') {
+      const { error } = await (insforge as any).database.rpc('apply_bulk_upsert', {
+        p_tenant_id: tenantId,
+        p_to_insert: toInsert,
+        p_to_update: toUpdate,
+      });
+      if (error) txError = error;
+    } else {
+      // Fallback secuencial si el método rpc no está disponible en el SDK
+      try {
+        if (toInsert.length > 0) {
+          const { error: insErr } = await insforge.database
+            .from('products')
+            .insert(toInsert.map(p => ({ tenant_id: tenantId, ...p })));
+          if (insErr) throw insErr;
+        }
+        for (const upProduct of toUpdate) {
+          const { error: updErr } = await insforge.database
+            .from('products')
+            .update({
+              name: upProduct.name,
+              description: upProduct.description,
+              price: upProduct.price,
+              stock: upProduct.stock,
+              image_url: upProduct.image_url,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', upProduct.id)
+            .eq('tenant_id', tenantId);
+          if (updErr) throw updErr;
+        }
+      } catch (err) {
+        txError = err;
+      }
+    }
+
+    if (txError) throw txError;
+
+    res.json({
+      success: true,
+      created: toInsert.length,
+      updated: toUpdate.length,
+      unchanged: unchangedCount,
+    });
+
+    // Emitir evento catalog.updated de webhook
+    emitEvent(tenantId, 'catalog.updated', {
+      action: 'bulk_import',
+      createdCount: toInsert.length,
+      updatedCount: toUpdate.length,
+      unchangedCount
+    }).catch(() => {});
+
     syncResourceCounts(tenantId).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al importar productos' });
@@ -301,6 +385,12 @@ app.put('/api/catalog/:id', async (req: express.Request, res: express.Response) 
 
     if (error) throw error;
     res.json({ success: true, product: data?.[0] });
+
+    // Emitir evento catalog.updated de webhook
+    emitEvent(tenantId, 'catalog.updated', {
+      action: 'update',
+      product: data?.[0]
+    }).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al actualizar producto' });
   }
@@ -350,6 +440,13 @@ app.delete('/api/catalog/:id', async (req: express.Request, res: express.Respons
     if (deleteError) throw deleteError;
 
     res.json({ success: true });
+
+    // Emitir evento catalog.updated de webhook
+    emitEvent(tenantId, 'catalog.updated', {
+      action: 'delete',
+      productId: id
+    }).catch(() => {});
+
     syncResourceCounts(tenantId).catch(() => {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al eliminar producto' });
@@ -955,6 +1052,526 @@ app.get('/api/connectors/template', async (req: express.Request, res: express.Re
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// WEBHOOK INTEGRATIONS API (/api/webhooks/*)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Map in memory to rate limit manual test pings (1 per 5 seconds per endpoint)
+const lastTestPingMap = new Map<string, number>();
+
+// Helper to handle unauthorized requests
+function checkAuth(req: express.Request, res: express.Response): string | null {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) {
+    res.status(401).json({ error: 'unauthorized', message: 'Falta token de autenticación o es inválido' });
+    return null;
+  }
+  return tenantId;
+}
+
+// POST /api/webhooks — Create a webhook endpoint
+app.post('/api/webhooks', async (req: express.Request, res: express.Response) => {
+  const tenantId = checkAuth(req, res);
+  if (!tenantId) return;
+
+  const { url, events } = req.body;
+
+  // 1. Validar URL y eventos
+  const urlVal = validateUrl(url);
+  if (!urlVal.valid) {
+    res.status(400).json({ error: urlVal.error });
+    return;
+  }
+
+  const eventsVal = validateEventTypes(events);
+  if (!eventsVal.valid) {
+    res.status(400).json({ error: eventsVal.error });
+    return;
+  }
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    // 2. Limitar a máximo 10 endpoints por tenant
+    const { data: existing, error: countError } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('id, url')
+      .eq('tenant_id', tenantId);
+
+    if (countError) throw countError;
+
+    if (existing && existing.length >= 10) {
+      res.status(409).json({ error: 'Límite de endpoints alcanzado (máximo 10 por tenant)' });
+      return;
+    }
+
+    // 3. Validar URL única por tenant
+    const duplicate = existing?.find(ep => ep.url.toLowerCase().trim() === url.toLowerCase().trim());
+    if (duplicate) {
+      res.status(409).json({ error: 'Ya tienes un webhook configurado con esta URL exacta' });
+      return;
+    }
+
+    // 4. Generar secreto y guardar
+    const signingSecret = generateSigningSecret();
+    const { data: newEp, error: createError } = await serviceClient.database
+      .from('webhook_endpoints')
+      .insert([{
+        tenant_id: tenantId,
+        url: url.trim(),
+        events,
+        signing_secret: signingSecret,
+        is_active: true,
+        consecutive_failures: 0
+      }])
+      .select()
+      .single();
+
+    if (createError) throw createError;
+
+    // Retornar 201 con secreto visible solo una vez
+    res.status(201).json({
+      success: true,
+      endpoint: {
+        id: newEp.id,
+        tenant_id: newEp.tenant_id,
+        url: newEp.url,
+        events: newEp.events,
+        is_active: newEp.is_active,
+        consecutive_failures: newEp.consecutive_failures,
+        created_at: newEp.created_at,
+        updated_at: newEp.updated_at
+      },
+      signing_secret: signingSecret
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al crear el webhook' });
+  }
+});
+
+// GET /api/webhooks — List webhook endpoints (Excludes signing_secret)
+app.get('/api/webhooks', async (req: express.Request, res: express.Response) => {
+  const tenantId = checkAuth(req, res);
+  if (!tenantId) return;
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: endpoints, error } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('id, tenant_id, url, events, is_active, consecutive_failures, created_at, updated_at')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ success: true, endpoints: endpoints || [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al listar webhooks' });
+  }
+});
+
+// PUT /api/webhooks/:id — Update endpoint
+app.put('/api/webhooks/:id', async (req: express.Request, res: express.Response) => {
+  const tenantId = checkAuth(req, res);
+  if (!tenantId) return;
+
+  const { id } = req.params;
+  const { url, events } = req.body;
+
+  const urlVal = validateUrl(url);
+  if (!urlVal.valid) {
+    res.status(400).json({ error: urlVal.error });
+    return;
+  }
+
+  const eventsVal = validateEventTypes(events);
+  if (!eventsVal.valid) {
+    res.status(400).json({ error: eventsVal.error });
+    return;
+  }
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    // Verify ownership
+    const { data: ep, error: fetchErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('id, tenant_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr) throw fetchErr;
+    if (!ep) {
+      res.status(404).json({ error: 'Endpoint no encontrado' });
+      return;
+    }
+    if (ep.tenant_id !== tenantId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    // Check duplicate URL excluding this endpoint
+    const { data: dupUrlCheck } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('url', url.trim())
+      .neq('id', id)
+      .maybeSingle();
+
+    if (dupUrlCheck) {
+      res.status(409).json({ error: 'Ya tienes otro webhook configurado con esta URL exacta' });
+      return;
+    }
+
+    const { data: updatedEp, error: updateErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .update({
+        url: url.trim(),
+        events,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('id, tenant_id, url, events, is_active, consecutive_failures, created_at, updated_at')
+      .single();
+
+    if (updateErr) throw updateErr;
+    res.json({ success: true, endpoint: updatedEp });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al actualizar el webhook' });
+  }
+});
+
+// PATCH /api/webhooks/:id/toggle — Toggle active status
+app.patch('/api/webhooks/:id/toggle', async (req: express.Request, res: express.Response) => {
+  const tenantId = checkAuth(req, res);
+  if (!tenantId) return;
+
+  const id = req.params.id as string;
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: ep, error: fetchErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('id, tenant_id, is_active, consecutive_failures')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr) throw fetchErr;
+    if (!ep) {
+      res.status(404).json({ error: 'Endpoint no encontrado' });
+      return;
+    }
+    if (ep.tenant_id !== tenantId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    const nextActive = !ep.is_active;
+
+    const { error: updateErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .update({
+        is_active: nextActive,
+        consecutive_failures: nextActive ? 0 : ep.consecutive_failures, // reset if enabling
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (updateErr) throw updateErr;
+
+    if (!nextActive) {
+      cancelPendingRetries(id);
+    }
+
+    res.json({ success: true, is_active: nextActive });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al cambiar estado' });
+  }
+});
+
+// DELETE /api/webhooks/:id — Delete endpoint
+app.delete('/api/webhooks/:id', async (req: express.Request, res: express.Response) => {
+  const tenantId = checkAuth(req, res);
+  if (!tenantId) return;
+
+  const id = req.params.id as string;
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: ep, error: fetchErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('id, tenant_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr) throw fetchErr;
+    if (!ep) {
+      res.status(404).json({ error: 'Endpoint no encontrado' });
+      return;
+    }
+    if (ep.tenant_id !== tenantId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    const { error: deleteErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .delete()
+      .eq('id', id);
+
+    if (deleteErr) throw deleteErr;
+
+    cancelPendingRetries(id);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al eliminar el webhook' });
+  }
+});
+
+// POST /api/webhooks/:id/test — Send test delivery ping (test.ping event)
+app.post('/api/webhooks/:id/test', async (req: express.Request, res: express.Response) => {
+  const tenantId = checkAuth(req, res);
+  if (!tenantId) return;
+
+  const id = req.params.id as string;
+
+  // Rate limit: 1 request per 5 seconds
+  const lastTime = lastTestPingMap.get(id) || 0;
+  const now = Date.now();
+  if (now - lastTime < 5000) {
+    res.status(429).json({ error: 'Intenta de nuevo en unos segundos' });
+    return;
+  }
+  lastTestPingMap.set(id, now);
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: ep, error: fetchErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr) throw fetchErr;
+    if (!ep) {
+      res.status(404).json({ error: 'Endpoint no encontrado' });
+      return;
+    }
+    if (ep.tenant_id !== tenantId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    // Emit ping payload
+    const testPayload = {
+      id: crypto.randomUUID(),
+      event: 'test.ping' as const,
+      timestamp: new Date().toISOString(),
+      tenant_id: tenantId,
+      data: {
+        message: '¡Prueba de Webhook exitosa!',
+        version: '1.0.0',
+        triggered_at: new Date().toISOString()
+      }
+    };
+
+    const deliveryResult = await deliverToEndpoint(ep as WebhookEndpoint, testPayload, 1, null, true);
+
+    res.json({
+      success: deliveryResult.success,
+      statusCode: deliveryResult.statusCode,
+      responseBody: deliveryResult.responseBody,
+      error: deliveryResult.error
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al ejecutar prueba de webhook' });
+  }
+});
+
+// POST /api/webhooks/:id/regenerate-secret — Regenerate signing secret
+app.post('/api/webhooks/:id/regenerate-secret', async (req: express.Request, res: express.Response) => {
+  const tenantId = checkAuth(req, res);
+  if (!tenantId) return;
+
+  const id = req.params.id as string;
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    const { data: ep, error: fetchErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('id, tenant_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr) throw fetchErr;
+    if (!ep) {
+      res.status(404).json({ error: 'Endpoint no encontrado' });
+      return;
+    }
+    if (ep.tenant_id !== tenantId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    const newSecret = generateSigningSecret();
+
+    const { error: updateErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .update({
+        signing_secret: newSecret,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (updateErr) throw updateErr;
+
+    res.json({ success: true, signing_secret: newSecret });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al regenerar secreto' });
+  }
+});
+
+// GET /api/webhooks/:id/logs — List delivery logs paginated
+app.get('/api/webhooks/:id/logs', async (req: express.Request, res: express.Response) => {
+  const tenantId = checkAuth(req, res);
+  if (!tenantId) return;
+
+  const id = req.params.id as string;
+  const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 20); // max 20 logs per page
+  const offset = (page - 1) * limit;
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    // Verify endpoint ownership
+    const { data: ep, error: fetchErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('id, tenant_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr) throw fetchErr;
+    if (!ep) {
+      res.status(404).json({ error: 'Endpoint no encontrado' });
+      return;
+    }
+    if (ep.tenant_id !== tenantId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    // Get logs and count total
+    const { data: logs, error: logsErr } = await serviceClient.database
+      .from('delivery_logs')
+      .select('*')
+      .eq('endpoint_id', id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (logsErr) throw logsErr;
+
+    const { count, error: countErr } = await serviceClient.database
+      .from('delivery_logs')
+      .select('id', { count: 'exact' })
+      .eq('endpoint_id', id);
+
+    if (countErr) throw countErr;
+
+    const total = count || 0;
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      logs: logs || [],
+      page,
+      limit,
+      total,
+      totalPages
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al listar logs de webhooks' });
+  }
+});
+
+// POST /api/webhooks/logs/:logId/retry — Manual retry delivery
+app.post('/api/webhooks/logs/:logId/retry', async (req: express.Request, res: express.Response) => {
+  const tenantId = checkAuth(req, res);
+  if (!tenantId) return;
+
+  const logId = req.params.logId as string;
+
+  try {
+    const serviceClient = createClient({ baseUrl: process.env.INSFORGE_BASE_URL!, anonKey: (process.env.INSFORGE_SERVICE_KEY ?? process.env.INSFORGE_API_KEY)! });
+
+    // 1. Fetch the log and verify ownership
+    const { data: log, error: logErr } = await serviceClient.database
+      .from('delivery_logs')
+      .select('*')
+      .eq('id', logId)
+      .maybeSingle();
+
+    if (logErr) throw logErr;
+    if (!log) {
+      res.status(404).json({ error: 'Log de entrega no encontrado' });
+      return;
+    }
+    if (log.tenant_id !== tenantId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    // 2. Reject if delivery is not failed or permanently_failed
+    if (log.status !== 'permanently_failed' && log.status !== 'failed') {
+      res.status(400).json({ error: 'Solo se pueden reintentar envíos fallidos' });
+      return;
+    }
+
+    // 3. Fetch corresponding endpoint
+    const { data: ep, error: epErr } = await serviceClient.database
+      .from('webhook_endpoints')
+      .select('*')
+      .eq('id', log.endpoint_id)
+      .maybeSingle();
+
+    if (epErr) throw epErr;
+    if (!ep) {
+      res.status(404).json({ error: 'El endpoint asociado a este log ya no existe' });
+      return;
+    }
+
+    // 4. Retry the delivery with new UUID, updated timestamp, and linkage
+    const testPayload = {
+      ...log.payload,
+      id: crypto.randomUUID(), // New attempt ID
+      timestamp: new Date().toISOString()
+    };
+
+    const deliveryResult = await deliverToEndpoint(
+      ep as WebhookEndpoint,
+      testPayload,
+      log.attempt_number + 1, // increment attempt
+      log.parent_delivery_id || log.id, // root parent reference
+      log.is_test
+    );
+
+    res.json({
+      success: deliveryResult.success,
+      statusCode: deliveryResult.statusCode,
+      responseBody: deliveryResult.responseBody,
+      error: deliveryResult.error
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al reintentar envío' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // PLANS & SUBSCRIPTION API
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1435,3 +2052,8 @@ setInterval(async () => {
   try { await checkPastDueDowngrades(); } catch (e) { console.error('Past due downgrade error:', e); }
   try { await sendDowngradeWarnings(); } catch (e) { console.error('Downgrade warnings error:', e); }
 }, 60 * 60 * 1000); // every hour
+
+// Run background logs cleanup every 24 hours
+setInterval(async () => {
+  try { await runDeliveryLogsCleanup(); } catch (e) { console.error('Delivery logs cleanup job error:', e); }
+}, 24 * 60 * 60 * 1000); // every 24 hours

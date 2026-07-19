@@ -769,3 +769,99 @@
 .usage--normal   { background: #6366f1; }
 .usage--warning  { background: #f59e0b; }
 .usage--critical { background: #ef4444; }
+
+/* ─── WEBHOOKS & TOGGLE SWITCH STYLES ──────────────────────────────────────── */
+
+/* Switch Toggle Component */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #374151;
+  transition: .3s;
+  border-radius: 20px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--color-primary, #8b5cf6);
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
+
+/* Expandable Logs Table & Detail Previews */
+#logs-tbody tr {
+  transition: background-color var(--transition-fast, 0.15s);
+}
+
+#logs-tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Monospace pre container for logs */
+pre {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 #1f2937;
+}
+
+pre::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+pre::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+pre::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+  border-radius: 3px;
+}
+
+/* Custom modal close transition */
+.modal-overlay {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal {
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(15px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
