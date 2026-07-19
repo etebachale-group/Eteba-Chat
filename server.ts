@@ -853,9 +853,10 @@ app.get('/auth/google/callback', async (req: express.Request, res: express.Respo
       'rotterinzakus@gmail.com':   { role: 'tenant', tenantId: 'e22e9ee0-d29a-4172-88de-fb9ad14c9c1b' },
     };
 
-    if (platformRoles[profile.email]) {
-      userRole = platformRoles[profile.email].role;
-      linkedTenantId = platformRoles[profile.email].tenantId;
+    const targetEmail = profile.email.toLowerCase().trim();
+    if (platformRoles[targetEmail]) {
+      userRole = platformRoles[targetEmail].role;
+      linkedTenantId = platformRoles[targetEmail].tenantId;
     }
 
     // Crear token firmado con info extendida

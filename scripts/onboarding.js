@@ -21,6 +21,13 @@ const OnboardingWizard = (() => {
   }
 
   async function init(preselectedPlan) {
+    if (typeof Auth !== 'undefined') {
+      const user = Auth.getUser();
+      if (user && user.role === 'admin') {
+        return; // Omitir onboarding para Super Admin
+      }
+    }
+
     _preselectedPlan = preselectedPlan || null;
     try {
       const r = await fetch('/api/onboarding/status', { headers: _apiHeaders() });
