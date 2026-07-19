@@ -295,8 +295,8 @@ const Dashboard = (() => {
           <div class="admin-plan-card__stat"><span>Catálogo Productos</span><span>${fmt(p.product_limit)}</span></div>
           <div class="admin-plan-card__stat"><span>Max Conectores</span><span>${fmt(p.connector_limit)}</span></div>
           <div class="admin-plan-card__stat"><span>Max API Keys</span><span>${fmt(p.api_key_limit)}</span></div>
-          <div class="admin-plan-card__stat"><span>Precio Mensual</span><span>$${p.price_monthly_usd} USD</span></div>
-          <div class="admin-plan-card__stat"><span>Precio Anual</span><span>$${p.price_yearly_usd} USD</span></div>
+          <div class="admin-plan-card__stat"><span>Precio Mensual</span><span>${Number(p.price_monthly_usd).toLocaleString('es-ES')} FCFA</span></div>
+          <div class="admin-plan-card__stat"><span>Precio Anual</span><span>${Number(p.price_yearly_usd).toLocaleString('es-ES')} FCFA</span></div>
         `;
         card.querySelector('.btn-edit-plan').addEventListener('click', () => {
           showEditPlanModal(p);
@@ -335,12 +335,12 @@ const Dashboard = (() => {
               <input type="number" class="input" id="plan-api-limit" value="${plan.api_key_limit ?? ''}" style="width:100%;">
             </div>
             <div class="form-group">
-              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Precio Mensual (USD)</label>
-              <input type="number" step="0.01" class="input" id="plan-price-monthly" value="${plan.price_monthly_usd ?? 0}" style="width:100%;">
+              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Precio Mensual (FCFA)</label>
+              <input type="number" class="input" id="plan-price-monthly" value="${plan.price_monthly_usd ?? 0}" style="width:100%;">
             </div>
             <div class="form-group">
-              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Precio Anual (USD)</label>
-              <input type="number" step="0.01" class="input" id="plan-price-yearly" value="${plan.price_yearly_usd ?? 0}" style="width:100%;">
+              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Precio Anual (FCFA)</label>
+              <input type="number" class="input" id="plan-price-yearly" value="${plan.price_yearly_usd ?? 0}" style="width:100%;">
             </div>
           </div>
           <div class="modal__footer" style="display:flex;justify-content:flex-end;gap:12px;padding:16px 20px;border-top:1px solid var(--color-border);background:rgba(255,255,255,0.01);">
@@ -1324,7 +1324,7 @@ const Dashboard = (() => {
     const isCurrent = p.id === currentPlan.id;
     const isUpgrade = tier > currentTier;
     const isDowngrade = tier < currentTier;
-    const price = p.price_monthly_usd > 0 ? `$${p.price_monthly_usd}/mes` : 'Gratis';
+    const price = p.price_monthly_usd > 0 ? `${Number(p.price_monthly_usd).toLocaleString('es-ES')} FCFA/mes` : 'Gratis';
     let btn = '';
     if (isCurrent) btn = `<button class="btn btn--ghost btn--sm" disabled style="opacity:0.5;">Plan actual</button>`;
     else if (isUpgrade) btn = `<button class="btn btn--primary btn--sm" onclick="Dashboard._upgradePlan('${p.id}')">Actualizar</button>`;

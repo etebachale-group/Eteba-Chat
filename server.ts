@@ -2079,11 +2079,12 @@ app.get('/api/admin/stats', requireSuperAdmin, async (_req: express.Request, res
     // Usuarios totales registrados
     const rUsers = await pgPool.query(`SELECT COUNT(*) as total FROM users`);
 
-    // Suscripciones activas por plan
+    // Suscripciones activas por plan con sus precios mensuales reales para calcular el MRR dinámico
     const rPlans = await pgPool.query(`
-      SELECT plan_id, status, COUNT(*) as count
-      FROM subscriptions
-      GROUP BY plan_id, status
+      SELECT s.plan_id, s.status, COUNT(*) as count, COALESCE(MAX(p.price_monthly_usd), 0) as price_monthly
+      FROM subscriptions s
+      LEFT JOIN plans p ON p.id = s.plan_id
+      GROUP BY s.plan_id, s.status
       ORDER BY count DESC
     `);
 
@@ -2100,14 +2101,11 @@ app.get('/api/admin/stats', requireSuperAdmin, async (_req: express.Request, res
       WHERE period_year = EXTRACT(YEAR FROM NOW())::INTEGER AND period_month = EXTRACT(MONTH FROM NOW())::INTEGER
     `);
 
-    // Calcular MRR estimado basado en planes
-    const planPrices: Record<string, number> = {
-      free: 0, starter: 29, business: 79, enterprise: 299, trial: 0
-    };
+    // Calcular MRR estimado basado en planes y precios dinámicos (en FCFA)
     let mrr = 0;
     for (const row of rPlans.rows) {
       if (row.status === 'active') {
-        mrr += (planPrices[row.plan_id] || 0) * parseInt(row.count);
+        mrr += parseFloat(row.price_monthly || 0) * parseInt(row.count);
       }
     }
 
