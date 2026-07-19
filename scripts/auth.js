@@ -15,6 +15,8 @@ const Auth = (() => {
 
   /** Redirigir a Google OAuth (el backend maneja todo el flujo) */
   function signInWithGoogle() {
+    localStorage.removeItem('eteba_token');
+    localStorage.removeItem('eteba_user');
     window.location.href = '/auth/google';
   }
 

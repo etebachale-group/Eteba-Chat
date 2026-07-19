@@ -1930,6 +1930,7 @@ app.post('/api/onboarding/step', async (req: express.Request, res: express.Respo
   }
 
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     // Fetch current step_data via pgPool to bypass RLS
     const resUser = await pgPool.query(
       'SELECT onboarding_step_data FROM users WHERE id = $1',
@@ -1959,6 +1960,7 @@ app.get('/api/onboarding/status', async (req: express.Request, res: express.Resp
   if (!userId) { res.status(401).json({ error: 'unauthorized' }); return; }
 
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     // Fetch onboarding status via pgPool to bypass RLS
     const resUser = await pgPool.query(
       'SELECT onboarding_completed, onboarding_step, onboarding_step_data FROM users WHERE id = $1',
@@ -1985,6 +1987,7 @@ app.post('/api/onboarding/complete', async (req: express.Request, res: express.R
   if (!userId || !tenantId) { res.status(401).json({ error: 'unauthorized' }); return; }
 
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     const now = new Date().toISOString();
 
     // Update user onboarding state via pgPool to bypass RLS
