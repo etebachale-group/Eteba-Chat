@@ -2240,6 +2240,90 @@ app.patch('/api/admin/tenant/:id/plan', requireSuperAdmin, async (req: express.R
 });
 
 /**
+ * PATCH /api/admin/plan/:id — editar límites y precios de un plan específico
+ */
+app.patch('/api/admin/plan/:id', requireSuperAdmin, async (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+  const { 
+    monthly_query_limit, 
+    product_limit, 
+    connector_limit, 
+    api_key_limit, 
+    price_monthly_usd, 
+    price_yearly_usd,
+    features 
+  } = req.body;
+
+  try {
+    const limits = {
+      monthly_query_limit: monthly_query_limit === null || monthly_query_limit === '' ? null : parseInt(monthly_query_limit),
+      product_limit: product_limit === null || product_limit === '' ? null : parseInt(product_limit),
+      connector_limit: parseInt(connector_limit) || 1,
+      api_key_limit: api_key_limit === null || api_key_limit === '' ? null : parseInt(api_key_limit),
+      price_monthly_usd: parseFloat(price_monthly_usd) || 0,
+      price_yearly_usd: parseFloat(price_yearly_usd) || 0
+    };
+
+    let query = `
+      UPDATE plans SET
+        monthly_query_limit = $1,
+        product_limit = $2,
+        connector_limit = $3,
+        api_key_limit = $4,
+        price_monthly_usd = $5,
+        price_yearly_usd = $6
+    `;
+    const params: any[] = [
+      limits.monthly_query_limit,
+      limits.product_limit,
+      limits.connector_limit,
+      limits.api_key_limit,
+      limits.price_monthly_usd,
+      limits.price_yearly_usd
+    ];
+
+    if (features !== undefined) {
+      query += `, features = $7`;
+      params.push(Array.isArray(features) ? JSON.stringify(features) : features);
+    }
+
+    query += ` WHERE id = $${params.length + 1}`;
+    params.push(id);
+
+    await pgPool.query(query, params);
+    res.json({ success: true, plan_id: id, limits });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/tenant/:id/reset-usage — resetear consumo del mes actual para una empresa
+ */
+app.post('/api/admin/tenant/:id/reset-usage', requireSuperAdmin, async (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+  try {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    // Reset usage count for current period to 0
+    await pgPool.query(`
+      INSERT INTO usage_monthly (tenant_id, period_year, period_month, query_count, product_count, connector_count, api_key_count, updated_at)
+      VALUES ($1, $2, $3, 0, 0, 0, 0, NOW())
+      ON CONFLICT (tenant_id, period_year, period_month)
+      DO UPDATE SET 
+        query_count = 0,
+        updated_at = NOW()
+    `, [id, year, month]);
+
+    res.json({ success: true, tenant_id: id, message: 'Consumo de consultas restablecido a 0 para el mes actual.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/admin/subscriptions — resumen de todas las suscripciones
  */
 app.get('/api/admin/subscriptions', requireSuperAdmin, async (_req: express.Request, res: express.Response) => {

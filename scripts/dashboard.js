@@ -209,7 +209,7 @@ const Dashboard = (() => {
       tableEl.innerHTML = `
         <table class="admin-table">
           <thead><tr>
-            <th>Empresa</th><th>Owner</th><th>Plan</th><th>Estado</th><th>Consultas mes</th><th>Registro</th><th>Cambiar plan</th>
+            <th>Empresa</th><th>Owner</th><th>Plan</th><th>Estado</th><th>Consultas mes</th><th>Registro</th><th>Cambiar Plan / Estado</th><th>Acciones</th>
           </tr></thead>
           <tbody>
             ${data.tenants.map(t => `
@@ -217,15 +217,27 @@ const Dashboard = (() => {
                 <td><strong>${t.company_name || '—'}</strong></td>
                 <td><div style="font-size:0.8rem;">${t.owner_name || ''}</div><div style="font-size:0.75rem;color:var(--color-text-muted);">${t.owner_email || ''}</div></td>
                 <td><span class="plan-badge plan-badge--${t.plan_id || 'free'}">${t.plan_id || 'free'}</span></td>
-                <td><span class="plan-badge plan-badge--${t.subscription_status === 'active' ? 'business' : 'free'}">${t.subscription_status || '—'}</span></td>
-                <td style="text-align:center;">${Number(t.queries_this_month).toLocaleString()}</td>
+                <td><span class="plan-badge plan-badge--${t.subscription_status === 'active' ? 'business' : t.subscription_status === 'trialing' ? 'trialing' : 'free'}">${t.subscription_status || '—'}</span></td>
+                <td style="text-align:center;"><strong>${Number(t.queries_this_month).toLocaleString()}</strong></td>
                 <td style="font-size:0.8rem;color:var(--color-text-muted);">${formatDate(t.created_at)}</td>
                 <td>
-                  <select class="admin-plan-select" data-tenant-id="${t.tenant_id}" onchange="Dashboard.changeTenantPlan('${t.tenant_id}', this.value)">
-                    ${['free','starter','business','enterprise'].map(p =>
-                      `<option value="${p}" ${t.plan_id === p ? 'selected' : ''}>${p}</option>`
-                    ).join('')}
-                  </select>
+                  <div style="display:flex;flex-direction:column;gap:4px;">
+                    <select class="admin-plan-select" data-tenant-id="${t.tenant_id}" onchange="Dashboard.updateTenantSubscription('${t.tenant_id}', this.value, this.nextElementSibling.value)">
+                      ${['free','starter','business','enterprise'].map(p =>
+                        `<option value="${p}" ${t.plan_id === p ? 'selected' : ''}>Plan: ${p}</option>`
+                      ).join('')}
+                    </select>
+                    <select class="admin-plan-select" onchange="Dashboard.updateTenantSubscription('${t.tenant_id}', this.previousElementSibling.value, this.value)">
+                      ${['active','cancelled','trialing','past_due'].map(st =>
+                        `<option value="${st}" ${t.subscription_status === st ? 'selected' : ''}>Estado: ${st}</option>`
+                      ).join('')}
+                    </select>
+                  </div>
+                </td>
+                <td>
+                  <button class="btn btn--outline btn--sm" style="border-color:rgba(239,68,68,0.4);color:#f87171;" onclick="Dashboard.resetTenantUsage('${t.tenant_id}', '${t.company_name?.replace(/'/g, "\\'")}')">
+                    Restablecer Uso
+                  </button>
                 </td>
               </tr>
             `).join('')}
@@ -250,82 +262,6 @@ const Dashboard = (() => {
     }
   }
 
-  /** GET /api/admin/subscriptions */
-  async function loadAdminSubscriptions() {
-    const tableEl = document.getElementById('admin-subscriptions-table');
-    if (!tableEl) return;
-    tableEl.innerHTML = '<p class="text-muted" style="padding:1.5rem;">Cargando...</p>';
-
-    try {
-      const resp = await fetch(`${API_BASE}/api/admin/subscriptions`, {
-        headers: { Authorization: `Bearer ${getAdminToken()}` }
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      const data = await resp.json();
-
-      if (!data.subscriptions?.length) {
-        tableEl.innerHTML = '<p class="text-muted" style="padding:1.5rem;">No hay suscripciones.</p>';
-        return;
-      }
-
-      const formatDate = d => d ? new Date(d).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' }) : '—';
-      tableEl.innerHTML = `
-        <table class="admin-table">
-          <thead><tr>
-            <th>Empresa</th><th>Owner</th><th>Plan</th><th>Estado</th><th>Inicio</th><th>Vence</th><th>Actualizado</th>
-          </tr></thead>
-          <tbody>
-            ${data.subscriptions.map(s => `
-              <tr>
-                <td><strong>${s.company_name || '—'}</strong></td>
-                <td style="font-size:0.8rem;color:var(--color-text-muted);">${s.owner_email || '—'}</td>
-                <td><span class="plan-badge plan-badge--${s.plan_id || 'free'}">${s.plan_id || '—'}</span></td>
-                <td><span class="plan-badge plan-badge--${s.status === 'active' ? 'business' : s.status === 'trialing' ? 'trialing' : 'free'}">${s.status || '—'}</span></td>
-                <td style="font-size:0.8rem;">${formatDate(s.current_period_start)}</td>
-                <td style="font-size:0.8rem;">${formatDate(s.current_period_end)}</td>
-                <td style="font-size:0.8rem;color:var(--color-text-muted);">${formatDate(s.updated_at)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>`;
-    } catch (err) {
-      tableEl.innerHTML = `<p class="text-muted" style="padding:1.5rem;">Error: ${err.message}</p>`;
-    }
-  }
-
-  /** GET /api/admin/tenants — Uso & IA */
-  async function loadAdminUsage() {
-    const tableEl = document.getElementById('admin-usage-table');
-    if (!tableEl) return;
-    tableEl.innerHTML = '<p class="text-muted" style="padding:1.5rem;">Cargando...</p>';
-
-    try {
-      const resp = await fetch(`${API_BASE}/api/admin/tenants?limit=100`, {
-        headers: { Authorization: `Bearer ${getAdminToken()}` }
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      const data = await resp.json();
-
-      const sorted = (data.tenants || []).sort((a, b) => b.queries_this_month - a.queries_this_month);
-      tableEl.innerHTML = `
-        <table class="admin-table">
-          <thead><tr><th>Empresa</th><th>Owner</th><th>Plan</th><th>Consultas este mes</th></tr></thead>
-          <tbody>
-            ${sorted.map(t => `
-              <tr>
-                <td><strong>${t.company_name || '—'}</strong></td>
-                <td style="font-size:0.8rem;color:var(--color-text-muted);">${t.owner_email || '—'}</td>
-                <td><span class="plan-badge plan-badge--${t.plan_id || 'free'}">${t.plan_id || '—'}</span></td>
-                <td><strong style="color:#c4b5fd;">${Number(t.queries_this_month).toLocaleString()}</strong></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>`;
-    } catch (err) {
-      tableEl.innerHTML = `<p class="text-muted" style="padding:1.5rem;">Error: ${err.message}</p>`;
-    }
-  }
-
   /** GET /api/admin/plans */
   async function loadAdminPlans() {
     const gridEl = document.getElementById('admin-plans-grid');
@@ -345,32 +281,148 @@ const Dashboard = (() => {
       }
 
       const fmt = v => v === null || v === undefined ? 'Ilimitado' : v.toLocaleString();
-      gridEl.innerHTML = data.plans.map(p => `
-        <div class="admin-plan-card">
-          <div class="admin-plan-card__name"><span class="plan-badge plan-badge--${p.id}">${p.id}</span></div>
-          <div class="admin-plan-card__stat"><span>Consultas/mes</span><span>${fmt(p.monthly_query_limit)}</span></div>
-          <div class="admin-plan-card__stat"><span>Conectores</span><span>${fmt(p.max_connectors)}</span></div>
-          <div class="admin-plan-card__stat"><span>Docs ingesta</span><span>${fmt(p.max_ingest_docs)}</span></div>
-        </div>
-      `).join('');
+      
+      gridEl.innerHTML = '';
+      data.plans.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'admin-plan-card';
+        card.innerHTML = `
+          <div class="admin-plan-card__name" style="display:flex;justify-content:between;align-items:center;width:100%;">
+            <span class="plan-badge plan-badge--${p.id}">${p.id}</span>
+            <button class="btn btn--outline btn--sm btn-edit-plan" style="margin-left:auto;font-size:0.75rem;padding:4px 8px;">Editar</button>
+          </div>
+          <div class="admin-plan-card__stat" style="margin-top:0.75rem;"><span>Consultas/mes</span><span>${fmt(p.monthly_query_limit)}</span></div>
+          <div class="admin-plan-card__stat"><span>Catálogo Productos</span><span>${fmt(p.product_limit)}</span></div>
+          <div class="admin-plan-card__stat"><span>Max Conectores</span><span>${fmt(p.connector_limit)}</span></div>
+          <div class="admin-plan-card__stat"><span>Max API Keys</span><span>${fmt(p.api_key_limit)}</span></div>
+          <div class="admin-plan-card__stat"><span>Precio Mensual</span><span>$${p.price_monthly_usd} USD</span></div>
+          <div class="admin-plan-card__stat"><span>Precio Anual</span><span>$${p.price_yearly_usd} USD</span></div>
+        `;
+        card.querySelector('.btn-edit-plan').addEventListener('click', () => {
+          showEditPlanModal(p);
+        });
+        gridEl.appendChild(card);
+      });
     } catch (err) {
       gridEl.innerHTML = `<p class="text-muted" style="padding:1rem;">Error: ${err.message}</p>`;
     }
   }
 
-  /** Cambiar plan de un tenant (llamado desde la tabla) */
-  async function changeTenantPlan(tenantId, newPlan) {
+  /** Mostrar modal para editar un plan */
+  function showEditPlanModal(plan) {
+    const modalHTML = `
+      <div class="modal-backdrop" id="edit-plan-dialog" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;z-index:9999;">
+        <div class="modal" style="background:var(--color-bg);border:1px solid var(--color-border);border-radius:12px;width:90%;max-width:500px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.5);animation:slideUp 0.2s ease-out;">
+          <div class="modal__header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--color-border);">
+            <h3 style="margin:0;font-size:1.15rem;font-weight:700;">Editar Plan: <span style="text-transform: capitalize;color:#a78bfa;">${plan.id}</span></h3>
+            <button class="modal__close" id="edit-plan-close" style="background:none;border:none;color:var(--color-text-muted);font-size:1.5rem;cursor:pointer;">&times;</button>
+          </div>
+          <div class="modal__body" style="padding:20px;max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:16px;">
+            <div class="form-group">
+              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Límite de Consultas/Mes (vacío para ilimitado)</label>
+              <input type="number" class="input" id="plan-query-limit" value="${plan.monthly_query_limit ?? ''}" style="width:100%;">
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Límite de Productos en Catálogo (vacío para ilimitado)</label>
+              <input type="number" class="input" id="plan-product-limit" value="${plan.product_limit ?? ''}" style="width:100%;">
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Límite de Conectores</label>
+              <input type="number" class="input" id="plan-connector-limit" value="${plan.connector_limit ?? 1}" style="width:100%;">
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Límite de API Keys (vacío para ilimitado)</label>
+              <input type="number" class="input" id="plan-api-limit" value="${plan.api_key_limit ?? ''}" style="width:100%;">
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Precio Mensual (USD)</label>
+              <input type="number" step="0.01" class="input" id="plan-price-monthly" value="${plan.price_monthly_usd ?? 0}" style="width:100%;">
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--color-text-muted);margin-bottom:6px;">Precio Anual (USD)</label>
+              <input type="number" step="0.01" class="input" id="plan-price-yearly" value="${plan.price_yearly_usd ?? 0}" style="width:100%;">
+            </div>
+          </div>
+          <div class="modal__footer" style="display:flex;justify-content:flex-end;gap:12px;padding:16px 20px;border-top:1px solid var(--color-border);background:rgba(255,255,255,0.01);">
+            <button class="btn btn--ghost" id="edit-plan-cancel">Cancelar</button>
+            <button class="btn btn--primary" id="edit-plan-save">Guardar Cambios</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    const modal = document.getElementById('edit-plan-dialog');
+
+    function close() {
+      modal.remove();
+    }
+
+    document.getElementById('edit-plan-close').addEventListener('click', close);
+    document.getElementById('edit-plan-cancel').addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    document.getElementById('edit-plan-save').addEventListener('click', async () => {
+      const qLimit = document.getElementById('plan-query-limit').value.trim();
+      const pLimit = document.getElementById('plan-product-limit').value.trim();
+      const cLimit = document.getElementById('plan-connector-limit').value.trim();
+      const aLimit = document.getElementById('plan-api-limit').value.trim();
+      const pMonthly = document.getElementById('plan-price-monthly').value.trim();
+      const pYearly = document.getElementById('plan-price-yearly').value.trim();
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/admin/plan/${plan.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAdminToken()}` },
+          body: JSON.stringify({
+            monthly_query_limit: qLimit === '' ? null : parseInt(qLimit),
+            product_limit: pLimit === '' ? null : parseInt(pLimit),
+            connector_limit: parseInt(cLimit) || 1,
+            api_key_limit: aLimit === '' ? null : parseInt(aLimit),
+            price_monthly_usd: parseFloat(pMonthly) || 0,
+            price_yearly_usd: parseFloat(pYearly) || 0
+          })
+        });
+
+        if (!resp.ok) throw new Error(await resp.text());
+        showToast('Plan actualizado con éxito.', 'success');
+        close();
+        await loadAdminPlans();
+      } catch (err) {
+        alert('Error al guardar cambios: ' + err.message);
+      }
+    });
+  }
+
+  /** Actualizar suscripción completa (plan y/o estado) */
+  async function updateTenantSubscription(tenantId, newPlan, newStatus) {
     try {
       const resp = await fetch(`${API_BASE}/api/admin/tenant/${tenantId}/plan`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAdminToken()}` },
-        body: JSON.stringify({ plan_id: newPlan, status: 'active' })
+        body: JSON.stringify({ plan_id: newPlan, status: newStatus })
       });
       if (!resp.ok) throw new Error(await resp.text());
-      // Reload tenants table to show updated state
+      showToast('Suscripción actualizada correctamente.', 'success');
       await loadAdminTenants(document.getElementById('admin-tenant-search')?.value || '');
     } catch (err) {
       alert('Error al cambiar plan: ' + err.message);
+    }
+  }
+
+  /** Restablecer consultas consumidas de un tenant */
+  async function resetTenantUsage(tenantId, companyName) {
+    if (!confirm(`¿Restablecer el consumo de consultas a 0 para ${companyName} este mes?`)) return;
+    try {
+      const resp = await fetch(`${API_BASE}/api/admin/tenant/${tenantId}/reset-usage`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getAdminToken()}` }
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      showToast('Consumo restablecido a 0.', 'success');
+      await loadAdminTenants(document.getElementById('admin-tenant-search')?.value || '');
+    } catch (err) {
+      alert('Error al restablecer consumo: ' + err.message);
     }
   }
 
@@ -1334,7 +1386,7 @@ ${sub.status !== 'cancelled' ? `<button class="btn btn--ghost btn--sm" style="co
     } catch (_) { showToast('Error de conexión', 'error'); }
   }
 
-  return { init, loadDashboardData, displayTenantInfo, showConfirmDialog, loadPlanBadge, loadUsageSection, showBillingTab, loadBillingPortal, _upgradePlan, _downgradePlan, _cancelSubscription, changeTenantPlan };
+  return { init, loadDashboardData, displayTenantInfo, showConfirmDialog, loadPlanBadge, loadUsageSection, showBillingTab, loadBillingPortal, _upgradePlan, _downgradePlan, _cancelSubscription, updateTenantSubscription, resetTenantUsage };
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════════
